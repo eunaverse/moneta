@@ -851,3 +851,45 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   .undo-toast { grid-template-columns: 1fr auto; }
   .undo-toast > .undo-close { display: none; }
 }
+
+.calculation-value { position: relative; min-width: 0; min-height: 0 !important; display: inline-flex !important; align-items: center; gap: 7px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: help; letter-spacing: normal !important; outline: none; }
+.calculation-value > strong { min-width: 0; color: inherit; }
+.calculation-value:focus-visible { outline: 3px solid #8f7cf255; outline-offset: 4px; }
+.calculation-badge { flex: 0 0 auto; width: 17px; height: 17px; display: grid !important; place-items: center; border: 1px solid currentColor; border-radius: 50%; color: inherit !important; font-family: Georgia, serif; font-size: 10px !important; font-style: italic; font-weight: 800 !important; line-height: 1; letter-spacing: 0 !important; opacity: .62; }
+.calculation-tooltip { position: absolute; top: calc(100% + 12px); z-index: 50; width: min(390px, calc(100vw - 32px)); max-height: min(520px, 72vh); display: grid !important; gap: 11px; padding: 16px; overflow: auto; border: 1px solid #4c4268; border-radius: 13px; background: #171329; color: #fff !important; box-shadow: 0 18px 50px #17132966; font-size: 11px !important; font-weight: 500 !important; letter-spacing: normal !important; line-height: 1.4; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-4px); transition: opacity .16s ease, transform .16s ease, visibility .16s ease; }
+.calculation-value.align-right > .calculation-tooltip { right: 0; }
+.calculation-value.align-left > .calculation-tooltip { left: 0; }
+.calculation-value:hover > .calculation-tooltip, .calculation-value:focus > .calculation-tooltip, .calculation-value:focus-within > .calculation-tooltip { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+.calculation-tooltip-title { display: block !important; color: #fff !important; font-size: 13px !important; font-weight: 850 !important; letter-spacing: 0 !important; }
+.calculation-tooltip code { display: block; padding: 9px 10px; border-radius: 8px; background: #ffffff0d; color: #d9d2ff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; white-space: normal; }
+.calculation-rows { display: grid !important; gap: 0; border-top: 1px solid #ffffff17; }
+.calculation-row { min-width: 0; display: grid !important; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 9px 0; border-bottom: 1px solid #ffffff17; color: #fff !important; font-size: 11px !important; letter-spacing: 0 !important; }
+.calculation-row > span { min-width: 0; display: block !important; color: #fff !important; font-size: 11px !important; letter-spacing: 0 !important; }
+.calculation-row b { display: block; overflow-wrap: anywhere; font-size: 11px; }
+.calculation-row small { display: block; margin-top: 3px; color: #aaa3bd !important; font-size: 9px !important; font-weight: 500; line-height: 1.4; }
+.calculation-row > strong { margin: 0 !important; color: #fff !important; font-size: 11px !important; text-align: right; white-space: nowrap; }
+.calculation-row.subtract > strong { color: #ffae9d !important; }
+.calculation-row.result { margin-top: 2px; padding: 10px 8px; border: 0; border-radius: 8px; background: #ffffff0c; }
+.calculation-row.result > strong { color: #72e0bc !important; }
+.calculation-note { display: block !important; margin: 0 !important; color: #aaa3bd !important; font-size: 9px !important; font-weight: 500; line-height: 1.5; }
+.budget-capacity-section > .calculation-value { min-height: 0; padding: 0; border: 0; background: transparent; color: #fff; font-size: inherit; font-weight: inherit; }
+.budget-capacity-section .capacity-number > strong { font-size: clamp(28px, 4vw, 42px); letter-spacing: -.04em; white-space: nowrap; }
+.budget-capacity-section .calculation-badge { color: #c5b9ff !important; }
+.budget-month-heading > .month-heading-number > strong { font-size: 22px; white-space: nowrap; }
+.budget-month-values .calculation-value > strong { display: block; margin-top: 7px; font-size: 21px; }
+.budget-month-values .calculation-value .calculation-badge { margin-top: 7px; }
+.category-heading-actions > .calculation-value > strong { white-space: nowrap; }
+.category-heading-actions > .calculation-value { color: var(--ink); }
+.insight-action-card > div:first-child > .insight-target-number { display: inline-flex !important; margin-top: 9px; color: var(--ink); font-size: inherit; letter-spacing: normal; }
+.insight-action-card .insight-target-number > strong { font-size: 38px; letter-spacing: -.045em; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .budget-capacity-section .capacity-number { justify-self: start; }
+  .budget-month-heading > .month-heading-number { max-width: 190px; justify-self: end; text-align: right; }
+  .insight-action-card .insight-target-number > strong { font-size: 34px; }
+}
+
+@media (max-width: 520px) {
+  .calculation-tooltip { position: fixed; top: auto; right: 16px !important; bottom: calc(18px + env(safe-area-inset-bottom)); left: 16px !important; width: auto; max-height: 68vh; }
+  .budget-month-heading > .month-heading-number { max-width: none; justify-self: start; text-align: left; }
+}
