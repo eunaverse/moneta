@@ -1,8 +1,7 @@
-# vinext-starter
+# Moneta
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+A private multi-currency budget dashboard running on
+[vinext](https://github.com/cloudflare/vinext) and Cloudflare Workers.
 
 ## Prerequisites
 
@@ -16,12 +15,20 @@ npm run dev
 npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+Production is deployed to `moneta.eunaverse.workers.dev`.
+
+Pushes to `main` run the GitHub Actions workflow in
+`.github/workflows/deploy-cloudflare.yml`. The repository must define these
+GitHub Actions secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
 ## Included Shape
 
 - edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
 - `vite.config.ts` simulates declared bindings for local development
 - `db/schema.ts` starts intentionally empty
 - `examples/d1/` contains an optional D1 example surface
@@ -91,6 +98,7 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
+- `npm run deploy`: build and deploy the `moneta` Worker
 - `npm test`: build the starter and verify its rendered loading skeleton
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
