@@ -5,14 +5,18 @@ test.beforeEach(async ({ page }) => openApp(page));
 
 test("previews a what-if purchase and prepares a one-time payment", async ({ page }) => {
   await openPrimaryView(page, "What-if");
+  await expect(page.getByText("PLAN END DATE", { exact: true })).toBeVisible();
+  await expect(page.getByText("Simulation period", { exact: true })).toHaveCount(0);
   await page.getByLabel("One-time purchase").fill("500");
   await expect(page.locator(".scenario-result")).toBeVisible();
+  await expect(page.getByLabel("What-if calculation breakdown")).toContainText("What-if one-time purchase");
+  await expect(page.getByText(/ESTIMATED BALANCE AT PLAN END/)).toBeVisible();
   await page.getByRole("button", { name: /Prepare as one-time payment/ }).click();
   await expect(page.getByRole("heading", { name: "Budget", level: 1 })).toBeVisible();
   await expect(page.locator(".recurring-form").getByLabel("Name")).toHaveValue("What-if purchase");
 });
 
-test("edits assets, forecast settings, and insights period", async ({ page }) => {
+test("edits assets, the fixed plan period, and insights period", async ({ page }) => {
   await page.getByRole("button", { name: "Edit assets" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit assets & income" });
   await dialog.getByLabel("USD cash").fill("10000");
@@ -20,7 +24,8 @@ test("edits assets, forecast settings, and insights period", async ({ page }) =>
   await expect(page.getByText("$10,000", { exact: true }).first()).toBeVisible();
 
   await openPrimaryView(page, "Settings");
-  await page.getByLabel("Forecast months").fill("36");
+  await page.getByLabel("Planning end month").fill("2099-12");
+  await expect(page.getByLabel("Planning end month")).toHaveValue("2099-12");
   await page.getByLabel("KRW per USD").fill("1350");
   await openPrimaryView(page, "Insights");
   await page.locator(".insight-range-controls").getByRole("spinbutton").fill("12");

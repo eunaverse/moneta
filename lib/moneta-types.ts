@@ -6,7 +6,9 @@ export type BudgetState = {
   krwEmergency: number;
   usdCash: number;
   exchangeRate: number;
-  planningMonths: number;
+  planningStartMonth: string;
+  planningEndMonth: string;
+  planningMonths?: number;
   monthlyIncome: number;
 };
 

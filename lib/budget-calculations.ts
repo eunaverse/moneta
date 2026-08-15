@@ -19,10 +19,12 @@ export type ScheduledPaymentBreakdown = {
 
 export type PlanningCapacity = {
   forecastMonthKeys: string[];
+  remainingMonths: number;
   plannedOccurrences: PlannedOccurrence[];
   scheduledPayments: ScheduledPaymentBreakdown[];
   scheduledTotal: number;
   remainingAfterScheduled: number;
+  availableToSpread: number;
   suggestedMonthlySpending: number;
 };
 
@@ -49,15 +51,15 @@ export function calculatePlanningCapacity({
   currentNetWorth,
   recurringExpenses,
   startMonth,
-  planningMonths,
+  endMonth,
 }: {
   currentNetWorth: number;
   recurringExpenses: RecurringExpense[];
   startMonth: string;
-  planningMonths: number;
+  endMonth: string;
 }): PlanningCapacity {
-  const normalizedPlanningMonths = Math.max(1, Math.floor(planningMonths));
-  const forecastMonthKeys = Array.from({ length: normalizedPlanningMonths }, (_, index) => addMonths(startMonth, index));
+  const remainingMonths = Math.max(0, monthIndex(endMonth) - monthIndex(startMonth) + 1);
+  const forecastMonthKeys = Array.from({ length: remainingMonths }, (_, index) => addMonths(startMonth, index));
   const scheduledPayments = recurringExpenses.flatMap((expense) => {
     const months = forecastMonthKeys.filter((month) => isDueInMonth(expense, month) && !isPaidInMonth(expense, month));
     if (months.length === 0) return [];
@@ -85,13 +87,16 @@ export function calculatePlanningCapacity({
   });
   const scheduledTotal = scheduledPayments.reduce((sum, item) => sum + item.total, 0);
   const remainingAfterScheduled = currentNetWorth - scheduledTotal;
+  const availableToSpread = Math.max(0, remainingAfterScheduled);
 
   return {
     forecastMonthKeys,
+    remainingMonths,
     plannedOccurrences,
     scheduledPayments,
     scheduledTotal,
     remainingAfterScheduled,
-    suggestedMonthlySpending: Math.max(0, remainingAfterScheduled / normalizedPlanningMonths),
+    availableToSpread,
+    suggestedMonthlySpending: remainingMonths > 0 ? availableToSpread / remainingMonths : 0,
   };
 }
