@@ -646,6 +646,37 @@ button { cursor: pointer; }
 }
 
 /* Review-led clarity, accessibility, and scenario planning */
+.app-shell .transaction-filter-bar select,
+.app-shell .transaction-form select,
+.app-shell .category-heading-actions select,
+.app-shell .budget-category-add select,
+.app-shell .recurring-form > label select {
+  width: 100%;
+  max-width: 100%;
+  height: 46px;
+  min-height: 46px;
+  padding: 0 40px 0 13px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  outline: 0;
+  background-color: #fbfafe;
+  background-image: linear-gradient(45deg, transparent 50%, #716a80 50%), linear-gradient(135deg, #716a80 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.app-shell select:hover { border-color: #aaa1c1; }
+.app-shell select:disabled { cursor: not-allowed; opacity: .55; }
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -837,6 +868,7 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   .page-title > div > span, .card-heading > div > span, .asset-card-heading > span, .wealth-card-heading span, .metric-grid article > span, .insight-banner > span { font-size: 10px; }
   .page-title p, .clarity-note, .scheduled-strip > small, .empty-state span, .recurring-empty span, .settings-grid p { font-size: 12px; }
   button:not(.mobile-nav-backdrop), select, input:not([type="checkbox"]):not([type="file"]) { min-height: 44px; }
+  .app-shell select { font-size: 16px; }
   .mobile-menu-button { min-height: 40px !important; }
   .wealth-overview-values, .budget-month-values, .insight-kpis.two { grid-template-columns: 1fr; }
   .wealth-overview-values { gap: 10px; }
