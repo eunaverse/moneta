@@ -13,7 +13,6 @@ export type MonetaAccount = {
 export function MonetaAuthGate({ children }: { children: (account: MonetaAccount) => ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(hasSupabaseConfig);
-  const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -49,20 +48,21 @@ export function MonetaAuthGate({ children }: { children: (account: MonetaAccount
   if (loading) return <main className="auth-shell"><section className="auth-card loading"><div className="auth-mark">M</div><h1>Opening Moneta…</h1></section></main>;
 
   if (!session) {
-    const sendMagicLink = async (event: React.FormEvent) => {
-      event.preventDefault();
-      if (!supabase || !email.trim()) return;
+    const signInWithGoogle = async () => {
+      if (!supabase) return;
       setSubmitting(true);
       setMessage("");
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: window.location.origin },
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin },
       });
-      setMessage(error ? error.message : "Check your email for a secure sign-in link.");
-      setSubmitting(false);
+      if (error) {
+        setMessage(error.message);
+        setSubmitting(false);
+      }
     };
 
-    return <main className="auth-shell"><section className="auth-card"><div className="auth-mark">M</div><span>PRIVATE MONEY WORKSPACE</span><h1>Your finances,<br /><em>available anywhere.</em></h1><p>Sign in with email. Each account can only access its own financial data and receipts.</p><form onSubmit={sendMagicLink}><label><span>EMAIL</span><input type="email" autoComplete="email" required value={email} placeholder="you@example.com" onChange={(event) => setEmail(event.target.value)} /></label><button disabled={submitting}>{submitting ? "Sending…" : "Email me a sign-in link"}</button></form>{message && <div className="auth-message" role="status">{message}</div>}<small>No password required · secure link expires automatically</small></section></main>;
+    return <main className="auth-shell"><section className="auth-card"><div className="auth-mark">M</div><span>PRIVATE MONEY WORKSPACE</span><h1>Your finances,<br /><em>available anywhere.</em></h1><p>Sign in securely with your Google account. Each account can only access its own financial data and receipts.</p><button type="button" className="google-sign-in" disabled={submitting} onClick={signInWithGoogle}><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.87h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.35Z"/><path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.42l-3.24-2.51c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.39 13.9A6.02 6.02 0 0 1 6.08 12c0-.66.11-1.3.31-1.9V7.51H3.04A10 10 0 0 0 2 12c0 1.61.38 3.13 1.04 4.49l3.35-2.59Z"/><path fill="#EA4335" d="M12 5.97c1.47 0 2.79.51 3.83 1.5l2.87-2.88A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.96 5.51l3.35 2.59C7.18 7.73 9.39 5.97 12 5.97Z"/></svg><span>{submitting ? "Opening Google…" : "Continue with Google"}</span></button>{message && <div className="auth-message" role="alert">{message}</div>}<small>Use the Google account connected to your Moneta data.</small></section></main>;
   }
 
   return children({
