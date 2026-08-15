@@ -736,12 +736,11 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .auth-card h1 { margin: 13px 0 0; font-size: clamp(38px, 8vw, 58px); line-height: 1.02; letter-spacing: -.055em; }
 .auth-card h1 em { color: var(--purple); font-family: Georgia, serif; font-weight: 400; }
 .auth-card p { margin: 18px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
-.auth-card form { display: grid; gap: 14px; margin-top: 30px; }
-.auth-card form label span { display: block; margin-bottom: 7px; color: var(--muted); font-size: 9px; font-weight: 850; letter-spacing: .12em; }
-.auth-card input { width: 100%; min-height: 50px; padding: 0 14px; border: 1px solid var(--line); border-radius: 11px; background: #fbfafe; outline: none; }
-.auth-card input:focus { border-color: var(--purple); box-shadow: 0 0 0 3px #7057e819; }
-.auth-card form button { min-height: 50px; border: 0; border-radius: 11px; background: var(--purple); color: #fff; font-size: 12px; font-weight: 850; box-shadow: 0 9px 24px #7057e833; }
-.auth-card form button:disabled { cursor: wait; opacity: .58; }
+.google-sign-in { width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 30px; padding: 0 18px; border: 1px solid #d4cfdf; border-radius: 11px; background: #fff; color: #282332; font-size: 13px; font-weight: 850; box-shadow: 0 9px 24px #2d254414; cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+.google-sign-in:hover:not(:disabled) { border-color: #a89fc0; box-shadow: 0 12px 28px #2d25441f; transform: translateY(-1px); }
+.google-sign-in:focus-visible { outline: 3px solid #7057e82e; outline-offset: 3px; }
+.google-sign-in:disabled { cursor: wait; opacity: .58; }
+.google-sign-in svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .auth-card > small { display: block; margin-top: 16px; color: #9792a3; font-size: 10px; text-align: center; }
 .auth-message { margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: #edf9f5; color: #126c54; font-size: 11px; line-height: 1.45; }
 .auth-card.setup code { display: block; margin-top: 10px; padding: 11px 13px; overflow-wrap: anywhere; border-radius: 9px; background: #221c3a; color: #d9cffb; font-size: 11px; }
