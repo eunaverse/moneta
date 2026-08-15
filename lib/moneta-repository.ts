@@ -1,4 +1,5 @@
 import type { MonetaSnapshot } from "./moneta-types";
+import { isE2EMode } from "./e2e-mode";
 import { supabase } from "./supabase";
 
 const RECEIPT_BUCKET = "receipts";
@@ -21,6 +22,7 @@ const requireClient = () => {
 };
 
 export async function loadMonetaState(userId: string): Promise<MonetaStateRecord | null> {
+  if (isE2EMode) return null;
   const client = requireClient();
   const { data, error } = await client
     .from("finance_states")
@@ -37,6 +39,7 @@ export async function loadMonetaState(userId: string): Promise<MonetaStateRecord
 }
 
 export async function saveMonetaState(userId: string, state: MonetaSnapshot, expectedUpdatedAt: string | null): Promise<MonetaStateRecord> {
+  if (isE2EMode) return { state, updatedAt: new Date().toISOString() };
   const client = requireClient();
   const values = { user_id: userId, schema_version: state.version, state };
   const request = expectedUpdatedAt
@@ -53,6 +56,7 @@ export async function saveMonetaState(userId: string, state: MonetaSnapshot, exp
 }
 
 export function subscribeMonetaState(userId: string, onChange: (record: MonetaStateRecord) => void) {
+  if (isE2EMode) return () => undefined;
   const client = requireClient();
   const channel = client
     .channel(`finance-state:${userId}:${crypto.randomUUID()}`)
@@ -78,6 +82,7 @@ const safeExtension = (file: File) => {
 };
 
 export async function uploadReceipt(userId: string, transactionId: string, file: File, previousPath?: string) {
+  if (isE2EMode) return `${userId}/${transactionId}.${safeExtension(file)}`;
   const client = requireClient();
   const path = `${userId}/${transactionId}-${crypto.randomUUID()}.${safeExtension(file)}`;
   const { error } = await client.storage.from(RECEIPT_BUCKET).upload(path, file, {
@@ -91,12 +96,14 @@ export async function uploadReceipt(userId: string, transactionId: string, file:
 }
 
 export async function removeReceipt(path: string) {
+  if (isE2EMode) return;
   const client = requireClient();
   const { error } = await client.storage.from(RECEIPT_BUCKET).remove([path]);
   if (error) throw error;
 }
 
 export async function createReceiptUrls(paths: string[]) {
+  if (isE2EMode) return {};
   if (paths.length === 0) return {};
   const client = requireClient();
   const uniquePaths = Array.from(new Set(paths));

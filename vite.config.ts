@@ -21,6 +21,7 @@ export default defineConfig(async () => {
     plugins: [
       vinext(),
       cloudflare({
+        inspectorPort: process.env.VITE_E2E_MODE === "true" ? false : undefined,
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
       }),
     ],
