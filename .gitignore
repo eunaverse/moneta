@@ -41,5 +41,7 @@ yarn-error.log*
 /outputs/
 /work/
 .gstack/
+.codex-conflict-worktrees/
+.codex-conflict-preserver/
 .playwright-mcp/
 *.tsbuildinfo

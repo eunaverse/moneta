@@ -13,14 +13,16 @@ test("package scripts expose the TDD, full E2E, verification, and PR gates", asy
   assert.equal(pkg.scripts["test:e2e"], "playwright test");
   assert.equal(pkg.scripts.verify, "node scripts/change-harness.mjs verify");
   assert.equal(pkg.scripts.pr, "node scripts/change-harness.mjs pr");
+  assert.match(pkg.scripts.lint, /\.codex-conflict-worktrees/);
 });
 
 test("the repository documents and automates the mandatory change lifecycle", async () => {
-  const [agents, harness, quality, deploy] = await Promise.all([
+  const [agents, harness, quality, deploy, gitignore] = await Promise.all([
     read("AGENTS.md"),
     read("scripts/change-harness.mjs"),
     read(".github/workflows/quality.yml"),
     read(".github/workflows/deploy-cloudflare.yml"),
+    read(".gitignore"),
   ]);
 
   assert.match(agents, /Red → Green → Refactor/);
@@ -34,6 +36,7 @@ test("the repository documents and automates the mandatory change lifecycle", as
   assert.match(quality, /pull_request:/);
   assert.match(quality, /npm run verify/);
   assert.match(deploy, /npm run verify/);
+  assert.match(gitignore, /\.codex-conflict-worktrees\//);
 });
 
 test("every product feature is assigned to an executable E2E spec", async () => {
