@@ -12,7 +12,7 @@ test("previews a what-if purchase and prepares a one-time payment", async ({ pag
   await expect(page.getByLabel("What-if calculation breakdown")).toContainText("What-if one-time purchase");
   await expect(page.getByText(/ESTIMATED BALANCE AT PLAN END/)).toBeVisible();
   await page.getByRole("button", { name: /Prepare as one-time payment/ }).click();
-  await expect(page.getByRole("heading", { name: "Budget", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Scheduled payments", level: 1 })).toBeVisible();
   await expect(page.locator(".recurring-form").getByLabel("Name")).toHaveValue("What-if purchase");
 });
 
@@ -20,7 +20,7 @@ test("edits assets, the fixed plan period, and insights period", async ({ page }
   await page.getByRole("button", { name: "Edit assets" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit assets & income" });
   await dialog.getByLabel("USD cash").fill("10000");
-  await dialog.getByRole("button", { name: "Done" }).click();
+  await dialog.getByRole("button", { name: "Save balances" }).click();
   await expect(page.getByText("$10,000", { exact: true }).first()).toBeVisible();
 
   await openPrimaryView(page, "Settings");
