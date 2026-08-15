@@ -51,12 +51,18 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   ]);
 
   assert.match(page, /countsTowardMonthlyBudget/);
-  assert.match(page, /result\.totalUsd - currentMonthFixedTotal - unpaidOneTimeTotal/);
+  assert.match(page, /calculatePlanningCapacity/);
+  assert.match(page, /planningCapacity\.suggestedMonthlySpending/);
+  assert.match(page, /Every unpaid monthly and one-time payment is reserved through its end month/);
   assert.match(page, /const monthlyLivingBudget = monthlyBudgetTotal/);
   assert.match(page, /draft\.linksPlannedPayment/);
   assert.match(page, /LONG-TERM CAPACITY/);
   assert.match(page, /Suggested monthly spending/);
-  assert.match(page, /Net worth − this month&apos;s unpaid scheduled payments − unpaid one-time payments/);
+  assert.match(page, /Net worth − every unpaid scheduled payment in the forecast/);
+  assert.match(page, /function CalculationValue/);
+  assert.match(page, /calculation-tooltip/);
+  assert.match(css, /\.calculation-value:hover > \.calculation-tooltip/);
+  assert.match(css, /\.calculation-value:focus > \.calculation-tooltip/);
   assert.doesNotMatch(page, /label-with-tip">SCHEDULED/);
   assert.match(page, /Every month/);
   assert.doesNotMatch(page, /Repeat every/);
@@ -120,8 +126,8 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /index % 3 === 0/);
   assert.match(css, /\.visual-insights-grid > \* \{ min-width: 0;/);
   assert.match(css, /\.trend-bars\.compact/);
-  assert.match(page, /result\.totalUsd \/ planningMonths/);
-  assert.match(page, /Current net worth ÷ \{planningMonths\}-month forecast/);
+  assert.match(page, /const suggestedMonthlyBudget = monthlyLivingMoneyAvailable/);
+  assert.match(page, /Net worth after all forecast payments ÷ \{planningMonths\} months/);
   assert.match(page, /Over by category/);
   assert.match(page, /selectedMonthlyFixedItems = recurringExpenses\.filter/);
   assert.match(page, /fixedCostsForSelectedMonth = recurringExpenses\.filter/);
@@ -153,7 +159,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(css, /\.transaction-filter-bar/);
   assert.match(page, /budget-capacity-section/);
   assert.match(page, /budget-month-section/);
-  assert.match(page, /Budget<\/span><strong>/);
+  assert.match(page, /Budget<\/span><CalculationValue/);
   assert.doesNotMatch(page, /budget-guide|Regular limit|Marked transactions|Assets only/);
   assert.match(page, /budget-category-balance/);
   assert.match(page, /Existing records will move to a remaining category/);

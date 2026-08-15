@@ -2,8 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element -- receipt previews use signed private-storage URLs */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { MonetaAuthGate, type MonetaAccount } from "../components/moneta-auth-gate";
+import { addMonths, calculatePlanningCapacity, isDueInMonth, isPaidInMonth, monthIndex } from "../lib/budget-calculations";
 import { createReceiptUrls, loadMonetaState, MonetaStateConflictError, removeReceipt, saveMonetaState, subscribeMonetaState, uploadReceipt, type MonetaStateRecord } from "../lib/moneta-repository";
 import type { BudgetState, CategorySort, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "../lib/moneta-types";
 
@@ -42,6 +43,7 @@ const categoryMigration: Record<string, string> = {
   "급여": "Salary", "보너스": "Bonus", "투자": "Investment", "환급": "Refund", "기타 수입": "Other income",
 };
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+const usdDetailed = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const krw = new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 });
 const chartColors = ["#7057e8", "#2fc99a", "#f26b4f", "#f6c850", "#4d9de0", "#b36ae2", "#63c174", "#ef8354", "#8d99ae", "#d45087"];
 const navigationItems: { view: View; label: string; icon: string }[] = [
@@ -75,21 +77,6 @@ const readLocalReceipt = async (id: string) => {
 };
 const localMonthKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const localDateKey = (date = new Date()) => `${localMonthKey(date)}-${String(date.getDate()).padStart(2, "0")}`;
-const monthIndex = (month: string) => {
-  const [year, monthNumber] = month.split("-").map(Number);
-  return year * 12 + monthNumber - 1;
-};
-const addMonths = (month: string, count: number) => {
-  const index = monthIndex(month) + count;
-  return `${Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, "0")}`;
-};
-const isDueInMonth = (expense: RecurringExpense, month: string) => {
-  if (expense.endMonth && monthIndex(month) > monthIndex(expense.endMonth)) return false;
-  if (expense.intervalMonths === 0) return expense.startMonth === month;
-  const difference = monthIndex(month) - monthIndex(expense.startMonth);
-  return difference >= 0 && difference % Math.max(1, expense.intervalMonths) === 0;
-};
-const isPaidInMonth = (expense: RecurringExpense, month: string) => expense.paidMonths?.includes(month) ?? false;
 const summarizeSchedule = (items: RecurringExpense[]) => {
   const names = items.slice(0, 3).map((item) => item.name).join(" · ");
   return `${names}${items.length > 3 ? ` · +${items.length - 3} more` : ""}`;
@@ -161,6 +148,21 @@ function LoadMore({ shown, total, step, onLoad }: { shown: number; total: number
 
 function SelectionBar({ count, noun, onDelete, onCancel }: { count: number; noun: string; onDelete: () => void; onCancel: () => void }) {
   return <div className="selection-bar" role="status"><strong>{count} selected</strong><div><button type="button" className="selection-cancel" onClick={onCancel}>Cancel</button><button type="button" className="selection-delete" disabled={count === 0} onClick={onDelete}><TrashIcon /> Delete {noun}</button></div></div>;
+}
+
+type CalculationRow = { label: string; value: string; detail?: string; tone?: "subtract" | "result" };
+
+function CalculationValue({ label, value, formula, rows, note, className = "", align = "right" }: { label: string; value: string; formula: string; rows: CalculationRow[]; note?: string; className?: string; align?: "left" | "right" }) {
+  const tooltipId = useId();
+  return <button type="button" className={`calculation-value ${className} align-${align}`} aria-label={`${label}: ${value}. Show calculation details.`} aria-describedby={tooltipId}>
+    <strong>{value}</strong><span className="calculation-badge" aria-hidden="true">i</span>
+    <span className="calculation-tooltip" id={tooltipId} role="tooltip">
+      <span className="calculation-tooltip-title">{label}</span>
+      <code>{formula}</code>
+      <span className="calculation-rows">{rows.map((row, index) => <span className={`calculation-row ${row.tone || ""}`} key={`${row.label}-${index}`}><span><b>{row.label}</b>{row.detail && <small>{row.detail}</small>}</span><strong>{row.value}</strong></span>)}</span>
+      {note && <small className="calculation-note">{note}</small>}
+    </span>
+  </button>;
 }
 
 function MonetaDashboard({ account }: { account: MonetaAccount }) {
@@ -538,6 +540,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const availableBudgetCategories = expenseCategories.filter((category) => !activeBudgetCategories.includes(category));
   const monthlyBudgetTotal = activeBudgetCategories.reduce((sum, category) => sum + (monthlyBudgets[category] || 0), 0);
   const currentMonth = localMonthKey();
+  const planningCapacity = calculatePlanningCapacity({ currentNetWorth: result.totalUsd, recurringExpenses, startMonth: currentMonth, planningMonths });
+  const { forecastMonthKeys, plannedOccurrences } = planningCapacity;
   const selectedMonthlyFixedItems = recurringExpenses.filter((item) => item.intervalMonths > 0 && isDueInMonth(item, selectedMonth));
   const fixedMonthlyTotal = selectedMonthlyFixedItems.reduce((sum, item) => sum + item.amount, 0);
   const selectedOneTimeItems = recurringExpenses.filter((item) => item.intervalMonths === 0 && isDueInMonth(item, selectedMonth));
@@ -558,12 +562,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   let budgetDonutCursor = 0;
   const budgetCategoryStats = activeBudgetCategories.map((category) => ({ category, amount: monthlyBudgets[category] || 0, color: chartColors[Math.max(0, expenseCategories.indexOf(category)) % chartColors.length] })).filter((item) => item.amount > 0).sort((first, second) => second.amount - first.amount);
   const budgetDonutGradient = monthlyBudgetTotal > 0 ? `conic-gradient(${budgetCategoryStats.map((item) => { const start = budgetDonutCursor; budgetDonutCursor += item.amount / monthlyBudgetTotal * 100; return `${item.color} ${start}% ${budgetDonutCursor}%`; }).join(", ")})` : "conic-gradient(#e8e5ef 0 100%)";
-  const forecastMonthKeys = Array.from({ length: planningMonths }, (_, index) => addMonths(currentMonth, index));
   const unpaidOneTimeItems = recurringExpenses.filter((item) => item.intervalMonths === 0 && forecastMonthKeys.includes(item.startMonth) && !isPaidInMonth(item, item.startMonth));
   const unpaidOneTimeTotal = unpaidOneTimeItems.reduce((sum, item) => sum + item.amount, 0);
-  const plannedOccurrences = recurringExpenses.flatMap((item) => forecastMonthKeys
-    .filter((month) => isDueInMonth(item, month) && !isPaidInMonth(item, month))
-    .map((month) => ({ key: `${item.id}::${month}`, expenseId: item.id, month, name: item.name, amount: item.amount, category: item.category })));
   const editingEntry = editingEntryId ? entries.find((entry) => entry.id === editingEntryId) : undefined;
   const editingPlannedOccurrence = editingEntry?.plannedExpenseId && editingEntry.plannedExpenseMonth
     ? (() => {
@@ -576,7 +576,36 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const currentScheduledTotal = currentScheduledItems.reduce((sum, item) => sum + item.amount, 0);
   const currentMonthFixedTotal = currentScheduledItems.filter((item) => item.intervalMonths > 0).reduce((sum, item) => sum + item.amount, 0);
   const monthlyLivingBudget = monthlyBudgetTotal;
-  const monthlyLivingMoneyAvailable = (result.totalUsd - currentMonthFixedTotal - unpaidOneTimeTotal) / planningMonths;
+  const monthlyLivingMoneyAvailable = planningCapacity.suggestedMonthlySpending;
+  const scheduledCapacityRows: CalculationRow[] = planningCapacity.scheduledPayments.length > 0
+    ? planningCapacity.scheduledPayments.map((item) => ({
+        label: item.name,
+        value: `−${usdDetailed.format(item.total)}`,
+        detail: `${usdDetailed.format(item.amountPerOccurrence)} × ${item.months.length} unpaid ${item.months.length === 1 ? "payment" : "payments"} · ${item.months[0]}${item.months.length > 1 ? `–${item.months[item.months.length - 1]}` : ""}`,
+        tone: "subtract" as const,
+      }))
+    : [{ label: "Scheduled payments", value: usdDetailed.format(0), detail: "No unpaid payments in this forecast" }];
+  const capacityCalculationRows: CalculationRow[] = [
+    { label: "Current net worth", value: usdDetailed.format(result.totalUsd) },
+    ...scheduledCapacityRows,
+    { label: "Total reserved", value: `−${usdDetailed.format(planningCapacity.scheduledTotal)}`, tone: "subtract" },
+    { label: "Left after reservations", value: usdDetailed.format(planningCapacity.remainingAfterScheduled) },
+    { label: "Forecast length", value: `÷ ${planningMonths} months` },
+    { label: "Suggested per month", value: usdDetailed.format(monthlyLivingMoneyAvailable), tone: "result" },
+  ];
+  const budgetCalculationRows: CalculationRow[] = [
+    ...activeBudgetCategories.map((category) => ({ label: category, value: usdDetailed.format(monthlyBudgets[category] || 0) })),
+    { label: "Monthly budget", value: usdDetailed.format(monthlyBudgetTotal), tone: "result" },
+  ];
+  const spentCalculationRows: CalculationRow[] = [
+    ...activeBudgetCategories.filter((category) => (spentByCategory[category] || 0) > 0).map((category) => ({ label: category, value: usdDetailed.format(spentByCategory[category] || 0) })),
+    { label: "Budget-counted spending", value: usdDetailed.format(monthlyBudgetExpenseTotal), tone: "result" },
+  ];
+  const budgetAvailableCalculationRows: CalculationRow[] = [
+    { label: "Monthly budget", value: usdDetailed.format(monthlyBudgetTotal) },
+    { label: "Budget-counted spending", value: `−${usdDetailed.format(monthlyBudgetExpenseTotal)}`, tone: "subtract" },
+    { label: budgetAvailable < 0 ? "Over budget" : "Left", value: usdDetailed.format(Math.abs(budgetAvailable)), tone: "result" },
+  ];
   const monthlyCategoryStats = expenseCategories.map((category, index) => ({ category, amount: monthEntries.filter((entry) => entry.type === "expense" && entry.category === category).reduce((sum, entry) => sum + toUsd(entry), 0), color: chartColors[index % chartColors.length] })).filter((item) => item.amount > 0).sort((first, second) => second.amount - first.amount);
   let monthlyDonutCursor = 0;
   const monthlyDonutGradient = monthlyExpenseTotal > 0 ? `conic-gradient(${monthlyCategoryStats.map((item) => { const start = monthlyDonutCursor; monthlyDonutCursor += item.amount / monthlyExpenseTotal * 100; return `${item.color} ${start}% ${monthlyDonutCursor}%`; }).join(", ")})` : "conic-gradient(#e8e5ef 0 100%)";
@@ -597,7 +626,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   }).filter((item) => item.over > 0).sort((first, second) => second.over - first.over);
   const totalOverBudget = overBudgetCategories.reduce((sum, item) => sum + item.over, 0);
   const maxCategoryOverage = Math.max(1, ...overBudgetCategories.map((item) => item.over));
-  const suggestedMonthlyBudget = Math.max(0, result.totalUsd / planningMonths);
+  const suggestedMonthlyBudget = monthlyLivingMoneyAvailable;
   const spendingTrend = insightMonthKeys.map((month) => ({
     month,
     amount: entries.filter((entry) => entry.type === "expense" && entry.date.startsWith(month)).reduce((sum, entry) => sum + toUsd(entry), 0),
@@ -1049,13 +1078,13 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
         {view === "budget" && <div className="page">
           <div className="page-title compact"><div><span>MONTHLY PLAN</span><h1>Budget</h1><p>Long-term capacity and this month&apos;s limit are shown separately.</p></div><label className="month-picker"><span>VIEW MONTH</span><input type="month" value={selectedMonth} onChange={(event) => chooseMonth(event.target.value)} /></label></div>
           <section className="budget-capacity-section">
-            <div><span>LONG-TERM CAPACITY</span><h2>Suggested monthly spending</h2><p>(Net worth − this month&apos;s unpaid scheduled payments − unpaid one-time payments) ÷ forecast months</p></div>
-            <strong>{usd.format(monthlyLivingMoneyAvailable)}</strong>
+            <div><span>LONG-TERM CAPACITY</span><h2>Suggested monthly spending</h2><p>(Net worth − every unpaid scheduled payment in the forecast) ÷ forecast months</p></div>
+            <CalculationValue className="capacity-number" label="Suggested monthly spending" value={usd.format(monthlyLivingMoneyAvailable)} formula={`max($0, (${usdDetailed.format(result.totalUsd)} − ${usdDetailed.format(planningCapacity.scheduledTotal)}) ÷ ${planningMonths})`} rows={capacityCalculationRows} note="Every unpaid monthly and one-time payment is reserved through its end month. Paid linked payments are already reflected in net worth and are not reserved again. Future income is not assumed." />
             <button type="button" onClick={() => navigate("settings")}>{planningMonths} months · Edit</button>
           </section>
           <section className="budget-month-section">
-            <div className="budget-month-heading"><div><span>{selectedMonth}</span><h2>This month</h2></div><strong className={budgetAvailable < 0 ? "danger-text" : "success-text"}>{budgetAvailable < 0 ? "Over" : "Left"} {usd.format(Math.abs(budgetAvailable))}</strong></div>
-            <div className="budget-month-values"><div><span>Budget</span><strong>{usd.format(monthlyLivingBudget)}</strong></div><div><span>Spent</span><strong>{usd.format(monthlyBudgetExpenseTotal)}</strong></div><div className={budgetAvailable < 0 ? "warning" : "positive"}><span>{budgetAvailable < 0 ? "Over" : "Left"}</span><strong>{usd.format(Math.abs(budgetAvailable))}</strong></div></div>
+            <div className="budget-month-heading"><div><span>{selectedMonth}</span><h2>This month</h2></div><CalculationValue className={`month-heading-number ${budgetAvailable < 0 ? "danger-text" : "success-text"}`} label={`${selectedMonth} budget balance`} value={`${budgetAvailable < 0 ? "Over" : "Left"} ${usd.format(Math.abs(budgetAvailable))}`} formula={`${usdDetailed.format(monthlyBudgetTotal)} − ${usdDetailed.format(monthlyBudgetExpenseTotal)} = ${usdDetailed.format(budgetAvailable)}`} rows={budgetAvailableCalculationRows} /></div>
+            <div className="budget-month-values"><div><span>Budget</span><CalculationValue label={`${selectedMonth} monthly budget`} value={usd.format(monthlyLivingBudget)} formula="sum of active category budgets" rows={budgetCalculationRows} align="left" /></div><div><span>Spent</span><CalculationValue label={`${selectedMonth} budget-counted spending`} value={usd.format(monthlyBudgetExpenseTotal)} formula="sum of saved expenses marked Monthly budget" rows={spentCalculationRows} align="left" /></div><div className={budgetAvailable < 0 ? "warning" : "positive"}><span>{budgetAvailable < 0 ? "Over" : "Left"}</span><CalculationValue label={`${selectedMonth} budget balance`} value={usd.format(Math.abs(budgetAvailable))} formula={`${usdDetailed.format(monthlyBudgetTotal)} − ${usdDetailed.format(monthlyBudgetExpenseTotal)} = ${usdDetailed.format(budgetAvailable)}`} rows={budgetAvailableCalculationRows} /></div></div>
             <div className="stacked-track"><i className={budgetAvailable < 0 ? "over" : "actual"} style={{ width: `${Math.min(100, monthlyBudgetTotal > 0 ? monthlyBudgetExpenseTotal / monthlyBudgetTotal * 100 : 0)}%` }} /></div>
           </section>
           <article className="category-budget">
@@ -1063,7 +1092,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
               <div><span>PLANNED MONTHLY</span><h2>Expected budgets</h2></div>
               <div className="category-heading-actions">
                 <label><span>SORT BY</span><select value={categorySort} onChange={(event) => { setCategorySort(event.target.value as CategorySort); setBudgetListLimit(5); cancelSelection(); }}><option value="manual">Custom order</option><option value="budget-desc">Budget · high to low</option><option value="alphabetical">Alphabetical</option><option value="spent-desc">Most spent</option><option value="spent-asc">Least spent</option></select></label>
-                <strong>{usd.format(monthlyBudgetTotal)}</strong>
+                <CalculationValue label="Expected monthly budgets" value={usd.format(monthlyBudgetTotal)} formula="sum of active category budgets" rows={budgetCalculationRows} />
                 <button type="button" className={`list-select ${selectionScope === "budgets" ? "active" : ""}`} onClick={() => toggleSelectionMode("budgets")}>{selectionScope === "budgets" ? "Cancel" : "Select"}</button>
               </div>
             </div>
@@ -1165,7 +1194,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
         {view === "insights" && <div className="page insights-page">
           <div className="page-title compact"><div><span>PERIOD SIGNALS</span><h1>Insights</h1></div><div className="insight-range-controls"><label className="month-picker"><span>END MONTH</span><input type="month" value={selectedMonth} onChange={(event) => { chooseMonth(event.target.value); setOverLimitLimit(5); }} /></label><label className="month-picker"><span>PERIOD</span><div><input type="number" min="1" max="24" value={insightMonths || ""} onChange={(event) => { setInsightMonths(Math.max(0, Math.min(24, Number(event.target.value) || 0))); setOverLimitLimit(5); }} onBlur={() => { if (insightMonths < 1) setInsightMonths(6); }} /> months</div></label></div></div>
           <article className="insight-action-card">
-            <div><span>NEXT MONTH TARGET</span><strong>{usd.format(suggestedMonthlyBudget)}</strong><small>Current net worth ÷ {planningMonths}-month forecast</small></div>
+            <div><span>NEXT MONTH TARGET</span><CalculationValue className="insight-target-number" label="Next month target" value={usd.format(suggestedMonthlyBudget)} formula={`max($0, (${usdDetailed.format(result.totalUsd)} − ${usdDetailed.format(planningCapacity.scheduledTotal)}) ÷ ${planningMonths})`} rows={capacityCalculationRows} note="This is the same verified capacity calculation shown on Budget." align="left" /><small>Net worth after all forecast payments ÷ {planningMonths} months</small></div>
             <div className="insight-action-copy"><i>{totalOverBudget > 0 ? "↓" : "✓"}</i><div><strong>{totalOverBudget > 0 ? `Reduce by ${usd.format(insightMonthlyAdjustment)}` : `Room under limits: ${usd.format(insightMonthlyAdjustment)}`}</strong><span>{totalOverBudget > 0 ? `${overBudgetCategories[0]?.category || "Spending"} drove the largest overage in this period.` : topCategory ? `${topCategory.category} was your largest category. Keep the next month within the target.` : "Add transactions to get a category-specific action."}</span></div></div>
           </article>
           <div className="visual-insights-grid single">
