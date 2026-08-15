@@ -57,6 +57,17 @@ const navigationItems: { view: View; label: string; icon: string }[] = [
   { view: "insights", label: "Insights", icon: "✦" },
   { view: "settings", label: "Settings", icon: "⚙" },
 ];
+const viewValues: View[] = ["overview", "budget", "fixed-costs", "transactions", "transaction-history", "categories", "what-if", "insights", "settings"];
+const viewFromUrl = () => {
+  const value = new URL(window.location.href).searchParams.get("view");
+  return value && viewValues.includes(value as View) ? value as View : "overview";
+};
+const urlForView = (view: View) => {
+  const url = new URL(window.location.href);
+  if (view === "overview") url.searchParams.delete("view");
+  else url.searchParams.set("view", view);
+  return `${url.pathname}${url.search}${url.hash}`;
+};
 const entryToUsd = (entry: LedgerEntry, rate: number) => entry.currency === "USD" ? entry.amount : entry.amount / Math.max(rate, 1);
 const RECEIPT_DB = "moneta-receipts";
 const RECEIPT_STORE = "images";
@@ -906,11 +917,41 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     setFixedCostLimit(8);
   };
   const navigate = (next: View) => {
+    if (next !== view) {
+      const currentState = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
+      window.history.pushState({ ...currentState, monetaView: next }, "", urlForView(next));
+    }
     setView(next);
     setMobileMenuOpen(false);
     cancelSelection();
     resetVisibleLists();
   };
+  useEffect(() => {
+    const restoreHistoryView = () => {
+      setView(viewFromUrl());
+      setMobileMenuOpen(false);
+      setSelectionScope(null);
+      setSelectedItems([]);
+      setOverviewTransactionLimit(3);
+      setActivityLimit(4);
+      setTransactionLimit(8);
+      setTransactionStatsLimit(5);
+      setBudgetListLimit(5);
+      setFixedCostPreviewLimit(3);
+      setFixedCostLimit(8);
+      setCategoryLimit(8);
+      setOverLimitLimit(5);
+    };
+    const initialView = viewFromUrl();
+    const currentState = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
+    window.history.replaceState({ ...currentState, monetaView: initialView }, "", urlForView(initialView));
+    const initialViewTimer = window.setTimeout(() => setView(initialView), 0);
+    window.addEventListener("popstate", restoreHistoryView);
+    return () => {
+      window.clearTimeout(initialViewTimer);
+      window.removeEventListener("popstate", restoreHistoryView);
+    };
+  }, []);
   const isNavigationActive = (itemView: View) => view === itemView
     || (itemView === "transactions" && view === "transaction-history")
     || (itemView === "budget" && view === "fixed-costs")
