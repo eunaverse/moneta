@@ -2,6 +2,7 @@
 
 import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState, type ReactNode } from "react";
+import { e2eSession, isE2EMode } from "../lib/e2e-mode";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 
 export type MonetaAccount = {
@@ -35,6 +36,10 @@ export function MonetaAuthGate({ children }: { children: (account: MonetaAccount
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  if (isE2EMode) {
+    return children({ session: e2eSession, signOut: async () => undefined });
+  }
 
   if (!hasSupabaseConfig) {
     return <main className="auth-shell"><section className="auth-card setup"><div className="auth-mark">M</div><span>DATABASE SETUP</span><h1>Connect Moneta to Supabase</h1><p>Add the two public Supabase values to the deployment environment, then redeploy.</p><code>VITE_SUPABASE_URL</code><code>VITE_SUPABASE_ANON_KEY</code></section></main>;
