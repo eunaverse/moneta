@@ -207,6 +207,9 @@ button { cursor: pointer; }
 .scheduled-strip > b { grid-row: 1 / 3; grid-column: 2; font-size: 20px; color: #997300; }
 .scheduled-strip > small { color: #887c58; font-size: 8px; }
 .overview-scheduled { margin: 20px 0 0; }
+.overdue-scheduled { border-color: #f0b8ae; background: #fff0ec; }
+.overdue-scheduled div span, .overdue-scheduled > b { color: #a43c2c; }
+.overdue-scheduled > small { color: #794f48; }
 .scheduled-cost-toggle { border-color: #d8cffb; background: #f6f2ff; }
 
 .transaction-layout, .budget-layout { display: grid; grid-template-columns: .72fr 1.28fr; gap: 20px; }
@@ -863,7 +866,9 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 }
 
 .insight-action-card { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); gap: 24px; align-items: center; margin-bottom: 20px; padding: 28px; border: 1px solid #cfc5f8; border-radius: 20px; background: linear-gradient(135deg, #f0edff, #fff); }
-.insight-action-card > div:first-child > span { color: var(--purple); font-size: 10px; font-weight: 850; letter-spacing: .12em; }
+.insight-plan-kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.insight-plan-kicker > span { color: var(--purple); font-size: 10px; font-weight: 850; letter-spacing: .12em; }
+.insight-plan-kicker > small { padding: 4px 7px; border-radius: 999px; background: #e6e0ff; color: #4f38aa; font-size: 9px; font-weight: 850; letter-spacing: .06em; }
 .insight-action-card > div:first-child > strong { display: block; margin-top: 9px; font-size: 38px; letter-spacing: -.045em; }
 .insight-action-card > div:first-child > small { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
 .insight-action-copy { display: grid; grid-template-columns: 46px 1fr; gap: 14px; align-items: center; padding: 18px; border-radius: 14px; background: #fff; }
