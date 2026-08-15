@@ -10,14 +10,18 @@ test("opens every primary workspace and preserves layout", async ({ page }) => {
   }
 });
 
-test("mobile drawer stays usable without a global floating transaction action", async ({ page }, testInfo) => {
+test("mobile drawer and quick-add action keep daily entry within one tap", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.includes("mobile"), "mobile-only interaction");
   await openApp(page);
-  await expect(page.locator(".mobile-transaction-fab")).toHaveCount(0);
+  const quickAdd = page.getByRole("button", { name: "Add transaction" });
+  await expect(quickAdd).toBeVisible();
+  const quickAddBox = await quickAdd.boundingBox();
+  expect(quickAddBox?.width).toBeGreaterThanOrEqual(44);
+  expect(quickAddBox?.height).toBeGreaterThanOrEqual(44);
   await page.getByRole("button", { name: "Open menu" }).click();
   await expect(page.getByRole("dialog", { name: "Main navigation" })).toBeVisible();
   await page.getByRole("button", { name: "Close menu" }).click();
-  await openPrimaryView(page, "Transactions");
+  await quickAdd.click();
   await expect(page.getByRole("heading", { name: "Add a transaction" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });

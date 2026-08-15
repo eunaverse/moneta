@@ -70,8 +70,8 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /End month · optional/);
   assert.match(page, /Save changes/);
   assert.match(page, /Payment month/);
-  assert.match(page, /Scheduled cost\?/);
-  assert.match(page, /Which scheduled cost\?/);
+  assert.match(page, /Match a scheduled payment\?/);
+  assert.match(page, /Scheduled payment/);
   assert.match(page, /This month/);
   assert.match(page, /Your money,/);
   assert.doesNotMatch(page, /from actual transactions/);
@@ -142,7 +142,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /overview-transaction-preview/);
   assert.match(page, /className="mobile-menu-button"/);
   assert.match(page, /className="mobile-drawer"/);
-  assert.doesNotMatch(page, /className="mobile-transaction-fab"/);
+  assert.match(page, /className="mobile-transaction-fab"/);
   assert.match(page, /aria-label="Open menu"/);
   assert.doesNotMatch(page, /<header className="mobile-header">.*?<select.*?<\/header>/s);
   assert.match(css, /\.mobile-drawer \{ position: fixed;/);
@@ -188,9 +188,10 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.doesNotMatch(page, /Simulation period/);
   assert.match(page, /view === "settings"/);
   assert.match(page, /Export or import/);
-  assert.match(page, /SCHEDULED PAYMENTS/);
+  assert.match(page, /Manage scheduled payments/);
+  assert.match(page, /ADD PAYMENT/);
   assert.match(css, /button:focus-visible/);
-  assert.doesNotMatch(css, /\.mobile-transaction-fab/);
+  assert.match(css, /\.mobile-transaction-fab/);
   assert.match(page, /className="budget-amount-input"/);
   assert.match(css, /\.budget-amount-input:focus-within/);
   assert.match(layout, /title:\s*"Moneta — Finances at a glance"/);
