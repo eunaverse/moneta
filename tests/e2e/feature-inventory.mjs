@@ -1,7 +1,7 @@
 export const features = [
   { id: "overview", journey: "See net worth, budget, and recent activity", spec: "tests/e2e/navigation-responsive.spec.ts" },
   { id: "desktop-navigation", journey: "Open every primary workspace", spec: "tests/e2e/navigation-responsive.spec.ts" },
-  { id: "mobile-navigation", journey: "Use the drawer and transaction CTA", spec: "tests/e2e/navigation-responsive.spec.ts" },
+  { id: "mobile-navigation", journey: "Use the drawer to reach the transaction workspace", spec: "tests/e2e/navigation-responsive.spec.ts" },
   { id: "responsive-layout", journey: "Avoid overflow at supported viewports", spec: "tests/e2e/navigation-responsive.spec.ts" },
   { id: "transaction-create-edit", journey: "Create and edit expense/income activity", spec: "tests/e2e/transactions.spec.ts" },
   { id: "transaction-filter-delete-undo", journey: "Filter, delete, and undo activity", spec: "tests/e2e/transactions.spec.ts" },
@@ -9,9 +9,9 @@ export const features = [
   { id: "monthly-budgets", journey: "Add and edit flexible budgets", spec: "tests/e2e/budget-planning.spec.ts" },
   { id: "scheduled-payments", journey: "Create, filter, edit, and bound scheduled payments", spec: "tests/e2e/budget-planning.spec.ts" },
   { id: "scheduled-payment-link", journey: "Link actual spending to a scheduled payment", spec: "tests/e2e/budget-planning.spec.ts" },
-  { id: "what-if", journey: "Preview a purchase and prepare it as one-time", spec: "tests/e2e/planning-settings.spec.ts" },
+  { id: "what-if", journey: "Preview a purchase through the fixed plan end date, inspect its calculation, and prepare it as one-time", spec: "tests/e2e/planning-settings.spec.ts" },
   { id: "insights", journey: "Change period and inspect spending signals", spec: "tests/e2e/planning-settings.spec.ts" },
-  { id: "asset-and-forecast-settings", journey: "Edit balances, exchange rate, and horizon", spec: "tests/e2e/planning-settings.spec.ts" },
+  { id: "asset-and-forecast-settings", journey: "Edit balances, exchange rate, and the fixed plan period", spec: "tests/e2e/planning-settings.spec.ts" },
   { id: "category-management", journey: "Create and rename spending categories", spec: "tests/e2e/planning-settings.spec.ts" },
   { id: "backup-import-error", journey: "Reject an invalid backup", spec: "tests/e2e/planning-settings.spec.ts" },
 ];
