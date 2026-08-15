@@ -84,7 +84,10 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /saveMonetaState/);
   assert.match(page, /Move to my account/);
   assert.match(page, /uploadReceipt/);
-  assert.match(authGate, /signInWithOtp/);
+  assert.match(authGate, /signInWithOAuth/);
+  assert.match(authGate, /provider: "google"/);
+  assert.match(authGate, /Continue with Google/);
+  assert.doesNotMatch(authGate, /signInWithOtp|Email me a sign-in link/);
   assert.match(authGate, /signOut/);
   assert.match(repository, /finance_states/);
   assert.match(repository, /createSignedUrls/);
