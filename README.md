@@ -99,8 +99,13 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
 - `npm run deploy`: build and deploy the `moneta` Worker
-- `npm test`: build the starter and verify its rendered loading skeleton
+- `npm run test:unit`: run Node unit and repository-contract tests
+- `npm run test:e2e`: run every feature journey in desktop and mobile Chromium
+- `npm run verify`: run lint, production build, unit tests, and the complete E2E suite
+- `npm run pr`: rerun the complete gate, push the topic branch, and create its pull request
 - `npm run db:generate`: generate Drizzle migrations after schema changes
+
+All changes follow the TDD and pull-request lifecycle in `AGENTS.md`. Install the Playwright browser once with `npx playwright install chromium` before the first local E2E run.
 
 ## Learn More
 
