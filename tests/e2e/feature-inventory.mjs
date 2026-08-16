@@ -19,6 +19,8 @@ export const features = [
   { id: "interface-language", journey: "Switch the primary workspace between English and Korean", spec: "tests/e2e/ux-polish.spec.ts" },
   { id: "readable-touch-ui", journey: "Use mobile controls and supporting copy at accessible sizes", spec: "tests/e2e/ux-polish.spec.ts" },
   { id: "insights", journey: "Change period and inspect spending signals", spec: "tests/e2e/planning-settings.spec.ts" },
+  { id: "insight-plan-scope", journey: "Change the analysis range without changing the live plan target", spec: "tests/e2e/planning-rollover.spec.ts" },
+  { id: "planning-month-rollover", journey: "Advance into a new month while overdue payments stay reserved and visible", spec: "tests/e2e/planning-rollover.spec.ts" },
   { id: "asset-and-forecast-settings", journey: "Edit balances, exchange rate, and the fixed plan period", spec: "tests/e2e/planning-settings.spec.ts" },
   { id: "category-management", journey: "Create and rename spending categories", spec: "tests/e2e/planning-settings.spec.ts" },
   { id: "backup-import-error", journey: "Reject an invalid backup", spec: "tests/e2e/planning-settings.spec.ts" },

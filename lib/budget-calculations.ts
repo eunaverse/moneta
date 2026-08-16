@@ -14,6 +14,7 @@ export type ScheduledPaymentBreakdown = {
   name: string;
   amountPerOccurrence: number;
   months: string[];
+  overdueMonths: string[];
   total: number;
 };
 
@@ -51,17 +52,22 @@ export function calculatePlanningCapacity({
   currentNetWorth,
   recurringExpenses,
   startMonth,
+  reservationStartMonth = startMonth,
   endMonth,
 }: {
   currentNetWorth: number;
   recurringExpenses: RecurringExpense[];
+  reservationStartMonth?: string;
   startMonth: string;
   endMonth: string;
 }): PlanningCapacity {
   const remainingMonths = Math.max(0, monthIndex(endMonth) - monthIndex(startMonth) + 1);
   const forecastMonthKeys = Array.from({ length: remainingMonths }, (_, index) => addMonths(startMonth, index));
+  const reservationFloor = monthIndex(reservationStartMonth) < monthIndex(startMonth) ? reservationStartMonth : startMonth;
+  const reservationMonths = Math.max(0, monthIndex(endMonth) - monthIndex(reservationFloor) + 1);
+  const reservationMonthKeys = Array.from({ length: reservationMonths }, (_, index) => addMonths(reservationFloor, index));
   const scheduledPayments = recurringExpenses.flatMap((expense) => {
-    const months = forecastMonthKeys.filter((month) => isDueInMonth(expense, month) && !isPaidInMonth(expense, month));
+    const months = reservationMonthKeys.filter((month) => isDueInMonth(expense, month) && !isPaidInMonth(expense, month));
     if (months.length === 0) return [];
     const amountPerOccurrence = Number.isFinite(expense.amount) ? Math.max(0, expense.amount) : 0;
     return [{
@@ -69,12 +75,13 @@ export function calculatePlanningCapacity({
       name: expense.name,
       amountPerOccurrence,
       months,
+      overdueMonths: months.filter((month) => monthIndex(month) < monthIndex(startMonth)),
       total: amountPerOccurrence * months.length,
     }];
   });
   const plannedOccurrences = recurringExpenses.flatMap((expense) => {
     const amount = Number.isFinite(expense.amount) ? Math.max(0, expense.amount) : 0;
-    return forecastMonthKeys
+    return reservationMonthKeys
       .filter((month) => isDueInMonth(expense, month) && !isPaidInMonth(expense, month))
       .map((month) => ({
         key: `${expense.id}::${month}`,

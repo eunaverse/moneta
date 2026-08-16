@@ -20,6 +20,44 @@ const defaultExpenseCategories = ["Housing", "Food", "Transport", "Insurance & H
 const incomeCategories = ["Salary", "Bonus", "Investment", "Refund", "Other income"];
 const localMonthKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const localDateKey = (date = new Date()) => `${localMonthKey(date)}-${String(date.getDate()).padStart(2, "0")}`;
+const millisecondsUntilNextLocalDay = (date = new Date()) => {
+  const nextDay = new Date(date);
+  nextDay.setHours(24, 0, 0, 50);
+  return Math.max(1_000, nextDay.getTime() - date.getTime());
+};
+
+function useCurrentMonth() {
+  const [currentMonth, setCurrentMonth] = useState(localMonthKey);
+
+  useEffect(() => {
+    let timer = 0;
+    const scheduleRefresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(refreshMonth, millisecondsUntilNextLocalDay());
+    };
+    const refreshMonth = () => {
+      setCurrentMonth((current) => {
+        const next = localMonthKey();
+        return current === next ? current : next;
+      });
+      scheduleRefresh();
+    };
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshMonth();
+    };
+
+    scheduleRefresh();
+    window.addEventListener("focus", refreshMonth);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", refreshMonth);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, []);
+
+  return currentMonth;
+}
 const defaultMonthlyBudgets: MonthlyBudgets = {
   Housing: 1800,
   Food: 650,
@@ -196,6 +234,7 @@ function CalculationValue({ label, value, formula, rows, note, className = "", a
 }
 
 function MonetaDashboard({ account }: { account: MonetaAccount }) {
+  const currentMonth = useCurrentMonth();
   const [view, setView] = useState<View>("overview");
   const [locale, setLocale] = useState<Locale>("en");
   const [data, setData] = useState<BudgetState>(defaults);
@@ -584,9 +623,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const activeBudgetCategories = budgetCategories.filter((category) => expenseCategories.includes(category));
   const availableBudgetCategories = expenseCategories.filter((category) => !activeBudgetCategories.includes(category));
   const monthlyBudgetTotal = activeBudgetCategories.reduce((sum, category) => sum + (monthlyBudgets[category] || 0), 0);
-  const currentMonth = localMonthKey();
   const forecastStartMonth = monthIndex(currentMonth) > monthIndex(data.planningStartMonth) ? currentMonth : data.planningStartMonth;
-  const planningCapacity = calculatePlanningCapacity({ currentNetWorth: result.totalUsd, recurringExpenses, startMonth: forecastStartMonth, endMonth: data.planningEndMonth });
+  const planningCapacity = calculatePlanningCapacity({ currentNetWorth: result.totalUsd, recurringExpenses, reservationStartMonth: data.planningStartMonth, startMonth: forecastStartMonth, endMonth: data.planningEndMonth });
   const remainingPlanningMonths = planningCapacity.remainingMonths;
   const planningPeriodLabel = `${data.planningStartMonth}–${data.planningEndMonth}`;
   const planningFormula = remainingPlanningMonths > 0
@@ -623,13 +661,18 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const selectablePlannedOccurrences = editingPlannedOccurrence && !plannedOccurrences.some((item) => item.key === editingPlannedOccurrence.key) ? [editingPlannedOccurrence, ...plannedOccurrences] : plannedOccurrences;
   const currentScheduledItems = recurringExpenses.filter((item) => isDueInMonth(item, currentMonth) && !isPaidInMonth(item, currentMonth));
   const currentScheduledTotal = currentScheduledItems.reduce((sum, item) => sum + item.amount, 0);
+  const overdueScheduledPayments = planningCapacity.scheduledPayments.filter((item) => item.overdueMonths.length > 0);
+  const overdueScheduledCount = overdueScheduledPayments.reduce((sum, item) => sum + item.overdueMonths.length, 0);
+  const overdueScheduledTotal = overdueScheduledPayments.reduce((sum, item) => sum + item.amountPerOccurrence * item.overdueMonths.length, 0);
+  const overdueScheduledNames = overdueScheduledPayments.map((item) => item.name);
+  const overdueScheduledSummary = `${overdueScheduledNames.slice(0, 3).join(" · ")}${overdueScheduledNames.length > 3 ? ` · +${overdueScheduledNames.length - 3} more` : ""}`;
   const monthlyLivingBudget = monthlyBudgetTotal;
   const monthlyLivingMoneyAvailable = planningCapacity.suggestedMonthlySpending;
   const scheduledCapacityRows: CalculationRow[] = planningCapacity.scheduledPayments.length > 0
     ? planningCapacity.scheduledPayments.map((item) => ({
-        label: item.name,
+        label: `${item.name}${item.overdueMonths.length > 0 ? " · OVERDUE" : ""}`,
         value: `−${usdDetailed.format(item.total)}`,
-        detail: `${usdDetailed.format(item.amountPerOccurrence)} × ${item.months.length} unpaid ${item.months.length === 1 ? "payment" : "payments"} · ${item.months[0]}${item.months.length > 1 ? `–${item.months[item.months.length - 1]}` : ""}`,
+        detail: `${usdDetailed.format(item.amountPerOccurrence)} × ${item.months.length} unpaid ${item.months.length === 1 ? "payment" : "payments"}${item.overdueMonths.length > 0 ? ` · ${item.overdueMonths.length} overdue` : ""} · ${item.months[0]}${item.months.length > 1 ? `–${item.months[item.months.length - 1]}` : ""}`,
         tone: "subtract" as const,
       }))
     : [{ label: "Scheduled payments", value: usdDetailed.format(0), detail: "No unpaid payments in this forecast" }];
@@ -1098,6 +1141,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
             <div className="wealth-overview-values"><div><span>Remaining</span><strong>{usd.format(result.totalUsd)}</strong></div><div><span>Spent</span><strong>{usd.format(allTimeExpenseUsd)}</strong></div><div><span>Total</span><strong>{usd.format(totalMoneyAvailableUsd)}</strong></div></div>
             <details className="wealth-details"><summary>Accounts & calculation <span>⌄</span></summary><div><p>Starting assets + recorded income − actual expenses</p><div className="asset-snapshot"><div><span>KRW ACCOUNTS</span><strong>{krw.format(data.krwPrimary + data.krwSecondary)}</strong></div><div><span>USD CASH</span><strong>{usd.format(data.usdCash)}</strong></div><div><span>EMERGENCY</span><strong>{krw.format(data.krwEmergency)}</strong></div></div></div></details>
           </article>
+          {overdueScheduledPayments.length > 0 && <div className="scheduled-strip overview-scheduled overdue-scheduled" role="status"><div><span>OVERDUE THROUGH {addMonths(currentMonth, -1)}</span><strong title={overdueScheduledNames.join(" · ")}>{overdueScheduledSummary}</strong></div><b>{usd.format(overdueScheduledTotal)}</b><small>{overdueScheduledCount} unpaid {overdueScheduledCount === 1 ? "payment remains" : "payments remain"} reserved until linked to a transaction.</small></div>}
           {currentScheduledItems.length > 0 && <div className="scheduled-strip overview-scheduled"><div><span>DUE THIS MONTH · {currentMonth}</span><strong title={currentScheduledItems.map((item) => item.name).join(" · ")}>{summarizeSchedule(currentScheduledItems)}</strong></div><b>{usd.format(currentScheduledTotal)}</b><small>Reserved already · link this schedule when recording the payment.</small></div>}
           <article className="month-card overview-budget-card"><div className="card-heading"><div><span>{selectedMonth}</span><h2>This month&apos;s flexible spending</h2></div><button onClick={() => navigate("budget")}>Edit budget</button></div><div className="budget-remaining"><span>FLEXIBLE BUDGET LEFT</span><strong className={budgetAvailable < 0 ? "danger-text" : "success-text"}>{usd.format(budgetAvailable)}</strong></div><div className="stacked-track"><i className="actual" style={{ width: `${Math.min(100, monthlyFlexibleBudgetForSelectedMonth > 0 ? monthlyBudgetExpenseTotal / monthlyFlexibleBudgetForSelectedMonth * 100 : 0)}%` }} /></div><div className="budget-breakdown"><div><i className="budget-dot" /><span>Flexible budget</span><strong>{usd.format(monthlyFlexibleBudgetForSelectedMonth)}</strong></div><div><i className="actual-dot" /><span>Flexible spending</span><strong>{usd.format(monthlyBudgetExpenseTotal)}</strong></div><div><i className="scheduled-dot" /><span>Outside budget</span><strong>{usd.format(monthlyOutsideBudgetTotal)}</strong></div></div><p className="clarity-note">Scheduled costs are reserved separately. Unlinked expenses reduce net worth as additional spending.</p></article>
           <article className="overview-transaction-preview">
@@ -1270,9 +1314,9 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
         </div>}
 
         {view === "insights" && <div className="page insights-page">
-          <div className="page-title compact"><div><span>{locale === "ko" ? "기간별 신호" : "PERIOD SIGNALS"}</span><h1>{locale === "ko" ? "분석" : "Insights"}</h1></div><div className="insight-range-controls"><label className="month-picker"><span>END MONTH</span><input type="month" value={selectedMonth} onChange={(event) => { chooseMonth(event.target.value); setOverLimitLimit(5); }} /></label><label className="month-picker"><span>PERIOD</span><div><input type="number" min="1" max="24" value={insightMonths || ""} onChange={(event) => { setInsightMonths(Math.max(0, Math.min(24, Number(event.target.value) || 0))); setOverLimitLimit(5); }} onBlur={() => { if (insightMonths < 1) setInsightMonths(6); }} /> months</div></label></div></div>
+          <div className="page-title compact"><div><span>{locale === "ko" ? "기간별 신호" : "PERIOD SIGNALS"}</span><h1>{locale === "ko" ? "분석" : "Insights"}</h1></div><div className="insight-range-controls"><label className="month-picker"><span>ANALYSIS THROUGH</span><input aria-label="Analysis through month" type="month" value={selectedMonth} onChange={(event) => { chooseMonth(event.target.value); setOverLimitLimit(5); }} /></label><label className="month-picker"><span>LOOKBACK</span><div><input aria-label="Analysis lookback months" type="number" min="1" max="24" value={insightMonths || ""} onChange={(event) => { setInsightMonths(Math.max(0, Math.min(24, Number(event.target.value) || 0))); setOverLimitLimit(5); }} onBlur={() => { if (insightMonths < 1) setInsightMonths(6); }} /> months</div></label></div></div>
           <article className="insight-action-card">
-            <div><span>NEXT MONTH TARGET</span><CalculationValue className="insight-target-number" label="Next month target" value={usd.format(suggestedMonthlyBudget)} formula={planningFormula} rows={capacityCalculationRows} note="This is the same verified capacity calculation shown on Budget." align="left" /><small>{remainingPlanningMonths > 0 ? `${usd.format(planningCapacity.availableToSpread)} left to spread through ${data.planningEndMonth} ÷ ${remainingPlanningMonths} months` : "Choose a new plan period in Settings."}</small></div>
+            <div><div className="insight-plan-kicker"><span>CURRENT PLAN TARGET</span><small>AS OF {currentMonth}</small></div><CalculationValue className="insight-target-number" label="Current plan target" value={usd.format(suggestedMonthlyBudget)} formula={planningFormula} rows={capacityCalculationRows} note={`Live plan as of ${currentMonth}. The analysis range above does not change this target.`} align="left" /><small>{remainingPlanningMonths > 0 ? `${usd.format(planningCapacity.availableToSpread)} left to spread through ${data.planningEndMonth} ÷ ${remainingPlanningMonths} months` : "Choose a new plan period in Settings."}</small></div>
             <div className="insight-action-copy"><i>{totalOverBudget > 0 ? "↓" : "✓"}</i><div><strong>{totalOverBudget > 0 ? `Reduce by ${usd.format(insightMonthlyAdjustment)}` : `Room under limits: ${usd.format(insightMonthlyAdjustment)}`}</strong><span>{totalOverBudget > 0 ? `${overBudgetCategories[0]?.category || "Spending"} drove the largest overage in this period.` : topCategory ? `${topCategory.category} was your largest category. Keep the next month within the target.` : "Add transactions to get a category-specific action."}</span></div></div>
           </article>
           <div className="visual-insights-grid single">
