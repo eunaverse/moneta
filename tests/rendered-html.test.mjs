@@ -142,7 +142,8 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /overview-transaction-preview/);
   assert.match(page, /className="mobile-menu-button"/);
   assert.match(page, /className="mobile-drawer"/);
-  assert.match(page, /className="mobile-transaction-fab"/);
+  assert.match(page, /className="mobile-quick-add"/);
+  assert.doesNotMatch(page, /className="mobile-transaction-fab"/);
   assert.match(page, /aria-label="Open menu"/);
   assert.doesNotMatch(page, /<header className="mobile-header">.*?<select.*?<\/header>/s);
   assert.match(css, /\.mobile-drawer \{ position: fixed;/);
@@ -165,7 +166,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(css, /\.transaction-filter-bar/);
   assert.match(page, /budget-capacity-section/);
   assert.match(page, /budget-month-section/);
-  assert.match(page, /Budget<\/span><CalculationValue/);
+  assert.match(page, /Category budget<\/span><CalculationValue/);
   assert.doesNotMatch(page, /budget-guide|Regular limit|Marked transactions|Assets only/);
   assert.match(page, /budget-category-balance/);
   assert.match(page, /Existing records will move to a remaining category/);
@@ -191,7 +192,8 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /Manage scheduled payments/);
   assert.match(page, /ADD PAYMENT/);
   assert.match(css, /button:focus-visible/);
-  assert.match(css, /\.mobile-transaction-fab/);
+  assert.match(css, /\.mobile-quick-add/);
+  assert.doesNotMatch(css, /\.mobile-transaction-fab/);
   assert.match(page, /className="budget-amount-input"/);
   assert.match(css, /\.budget-amount-input:focus-within/);
   assert.match(layout, /title:\s*"Moneta — Finances at a glance"/);
