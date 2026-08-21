@@ -8,6 +8,8 @@ export const features = [
   { id: "browser-history-navigation", journey: "Use browser back and forward to move between Moneta workspaces", spec: "tests/e2e/navigation-history.spec.ts" },
   { id: "select-control-layout", journey: "Use aligned touch-friendly select controls without overflow", spec: "tests/e2e/select-layout.spec.ts" },
   { id: "responsive-layout", journey: "Avoid overflow at supported viewports", spec: "tests/e2e/navigation-responsive.spec.ts" },
+  { id: "transaction-workspace-balance", journey: "Keep transaction entry readable beside actual activity and stack it before it becomes cramped", spec: "tests/e2e/workspace-layout.spec.ts" },
+  { id: "settings-responsive-structure", journey: "Give structural settings enough width and prevent control collisions", spec: "tests/e2e/workspace-layout.spec.ts" },
   { id: "transaction-create-edit", journey: "Create and edit expense/income activity", spec: "tests/e2e/transactions.spec.ts" },
   { id: "transaction-filter-delete-undo", journey: "Filter, delete, and undo activity", spec: "tests/e2e/transactions.spec.ts" },
   { id: "ai-transaction-description", journey: "Turn a natural-language purchase description into a reviewable transaction draft", spec: "tests/e2e/ai-transaction-entry.spec.ts" },

@@ -234,7 +234,8 @@ button { cursor: pointer; }
 .overdue-scheduled > small { color: #794f48; }
 .scheduled-cost-toggle { border-color: #d8cffb; background: #f6f2ff; }
 
-.transaction-layout, .budget-layout { display: grid; grid-template-columns: .72fr 1.28fr; gap: 20px; }
+.transaction-layout { display: grid; grid-template-columns: minmax(420px, 2fr) minmax(0, 3fr); gap: 20px; }
+.budget-layout { display: grid; grid-template-columns: .72fr 1.28fr; gap: 20px; }
 .transaction-form, .asset-settings { padding: 27px; align-self: start; }
 .transaction-form { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
 .transaction-form .card-heading, .type-tabs, .transaction-form .wide, .transaction-form .submit-button, .transaction-form-actions { grid-column: 1 / -1; }
@@ -594,6 +595,10 @@ button { cursor: pointer; }
 .receipt-viewer > button { position: fixed; top: 24px; right: 28px; width: 40px; height: 40px; border: 1px solid #ffffff44; border-radius: 50%; background: #171329; color: #fff; font-size: 23px; }
 .receipt-viewer > img { max-width: min(920px, 100%); max-height: calc(100vh - 60px); border-radius: 14px; object-fit: contain; box-shadow: 0 24px 80px #0008; }
 
+@media (max-width: 1320px) {
+  .transaction-layout { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1200px) {
   .metric-grid.four, .transaction-summary.four, .budget-hero.four { grid-template-columns: 1fr 1fr; }
   .category-row { grid-template-columns: 145px minmax(75px, 1fr) 100px 82px; }
@@ -848,6 +853,7 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .settings-grid > article.settings-data { grid-column: 1 / -1; }
 .settings-grid > article.settings-account { grid-column: 1 / -1; border-color: #d9d2f6; background: linear-gradient(135deg, #faf8ff, #fff); }
 .settings-grid > article.settings-language { grid-column: 1 / -1; }
+.settings-grid > article.currency-setting { grid-column: 1 / -1; }
 .settings-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; background: #eee9ff; color: var(--purple-dark); font-size: 18px; font-weight: 850; }
 .settings-grid article > div:nth-child(2) > span { color: var(--purple); font-size: 11px; font-weight: 850; letter-spacing: .12em; }
 .settings-grid h2 { margin: 6px 0 0; font-size: 18px; }
@@ -876,6 +882,10 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .language-options { display: grid; grid-template-columns: minmax(88px, .8fr) minmax(150px, 1.2fr); gap: 8px; }
 .language-options button { min-height: 44px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--muted); font-size: 12px; font-weight: 800; }
 .language-options button.active { border-color: var(--purple); background: #f1edff; color: var(--purple-dark); box-shadow: 0 0 0 2px #7057e814; }
+
+@media (max-width: 1100px) {
+  .settings-grid { grid-template-columns: 1fr; }
+}
 
 .auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 15% 10%, #e7e0ff 0, transparent 32%), radial-gradient(circle at 90% 90%, #d9f7ee 0, transparent 30%), #f6f5fa; }
 .auth-card { width: min(480px, 100%); padding: clamp(30px, 6vw, 52px); border: 1px solid #ded8eb; border-radius: 28px; background: #fff; box-shadow: 0 28px 80px #2d254424; }
