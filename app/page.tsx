@@ -821,6 +821,16 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const transactionDetailHasAllocations = Boolean(transactionDetailEntry?.allocations?.length);
   const transactionDetailCategories = transactionDetailEntry ? entryCategoryNames(transactionDetailEntry) : [];
   const transactionDetailItemsTotal = transactionDetailItems.reduce((sum, allocation) => sum + allocation.amount, 0);
+  const transactionDetailCategoryTotals = Array.from(transactionDetailItems.reduce((totals, item) => {
+    const category = item.category || transactionDetailEntry?.category || "Uncategorized";
+    const current = totals.get(category);
+    totals.set(category, {
+      category,
+      itemCount: (current?.itemCount || 0) + 1,
+      amount: Math.round(((current?.amount || 0) + item.amount) * 100) / 100,
+    });
+    return totals;
+  }, new Map<string, { category: string; itemCount: number; amount: number }>()).values());
   const transactionDetailDifference = transactionDetailEntry ? Math.round((transactionDetailEntry.amount - transactionDetailItemsTotal) * 100) / 100 : 0;
   const transactionDetailTotalMatches = Math.abs(transactionDetailDifference) <= 0.009;
   const receiptAllocationTotal = draft.allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
@@ -1614,7 +1624,11 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
           </div>
           <section className="transaction-detail-items" aria-labelledby="transaction-detail-items-title">
             <div className="transaction-detail-section-heading"><div><span>{transactionDetailHasAllocations ? "RECEIPT ITEMS" : "SUMMARY ITEM"}</span><h3 id="transaction-detail-items-title">{transactionDetailHasAllocations ? `${transactionDetailItems.length} item${transactionDetailItems.length === 1 ? "" : "s"}` : "Saved transaction summary"}</h3></div><strong>{transactionDetailCategories.length} {transactionDetailCategories.length === 1 ? "category" : "categories"}</strong></div>
-            <div className="transaction-detail-item-list" role="list">{transactionDetailItems.map((item, index) => <article className="transaction-detail-item" role="listitem" key={`${item.description}-${index}`}><div><span>ITEM {index + 1}</span><strong>{item.description || transactionDetailEntry.description}</strong></div><span>{item.category || transactionDetailEntry.category || "Uncategorized"}</span><strong>{formatOriginalCurrency(item.amount, transactionDetailEntry.currency)}</strong></article>)}</div>
+            <div className="transaction-detail-item-list" role="list">{transactionDetailItems.map((item, index) => <article className="transaction-detail-item" role="listitem" key={`${item.description}-${index}`}><div><span>ITEM {index + 1}</span><strong>{item.description || transactionDetailEntry.description}</strong></div><span title={item.category || transactionDetailEntry.category || "Uncategorized"}>{item.category || transactionDetailEntry.category || "Uncategorized"}</span><strong>{formatOriginalCurrency(item.amount, transactionDetailEntry.currency)}</strong></article>)}</div>
+          </section>
+          <section className="transaction-detail-category-totals" aria-labelledby="transaction-detail-category-totals-title">
+            <div className="transaction-detail-section-heading"><div><span>CATEGORY BREAKDOWN</span><h3 id="transaction-detail-category-totals-title">Category totals</h3></div></div>
+            <div className="transaction-detail-category-total-list" role="list">{transactionDetailCategoryTotals.map((total) => <article className="transaction-detail-category-total" role="listitem" key={total.category}><div><strong>{total.category}</strong><small>{total.itemCount} {total.itemCount === 1 ? "item" : "items"}</small></div><strong>{formatOriginalCurrency(total.amount, transactionDetailEntry.currency)}</strong></article>)}</div>
           </section>
           <section className={`transaction-detail-reconciliation ${transactionDetailTotalMatches ? "matched" : "warning"}`} aria-label="Transaction total reconciliation">
             <div><span>{transactionDetailHasAllocations ? "Item total" : "Summary total"}</span><strong>{formatOriginalCurrency(transactionDetailItemsTotal, transactionDetailEntry.currency)}</strong></div>

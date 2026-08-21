@@ -15,7 +15,7 @@ export const features = [
   { id: "settings-responsive-structure", journey: "Give structural settings enough width and prevent control collisions", spec: "tests/e2e/workspace-layout.spec.ts" },
   { id: "settings-change-clarity", journey: "Understand autosave and what a primary currency change affects", spec: "tests/e2e/product-usability.spec.ts" },
   { id: "transaction-create-edit", journey: "Create and edit expense/income activity", spec: "tests/e2e/transactions.spec.ts" },
-  { id: "transaction-detail", journey: "Open a saved transaction to read receipt allocations, total reconciliation, and a legacy single-category fallback", spec: "tests/e2e/transaction-detail.spec.ts" },
+  { id: "transaction-detail", journey: "Open a saved transaction to read aligned receipt allocations, category totals, total reconciliation, and a legacy single-category fallback", spec: "tests/e2e/transaction-detail.spec.ts" },
   { id: "transaction-entry-method", journey: "Choose AI-assisted or manual entry and understand whether an expense reduces category limits", spec: "tests/e2e/product-usability.spec.ts" },
   { id: "transaction-filter-delete-undo", journey: "Filter, delete, and undo activity", spec: "tests/e2e/transactions.spec.ts" },
   { id: "ai-transaction-description", journey: "Turn a natural-language purchase description into a reviewable transaction draft", spec: "tests/e2e/ai-transaction-entry.spec.ts" },
