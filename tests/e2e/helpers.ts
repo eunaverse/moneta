@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 
 export async function openApp(page: Page) {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Your money/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make your money last/ })).toBeVisible();
 }
 
 export async function openPrimaryView(page: Page, name: string) {

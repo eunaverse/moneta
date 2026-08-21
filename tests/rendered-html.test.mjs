@@ -58,8 +58,8 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /const monthlyLivingBudget = monthlyBudgetTotal/);
   assert.match(page, /draft\.linksPlannedPayment/);
   assert.match(page, /FIXED PLAN/);
-  assert.match(page, /Suggested monthly spending/);
-  assert.match(page, /Spread the money left after unpaid scheduled payments through your fixed end month/);
+  assert.match(page, /Safe monthly spend/);
+  assert.match(page, /Moneta reserves unpaid scheduled payments, then spreads the remaining money through your plan end date/);
   assert.match(page, /function CalculationValue/);
   assert.match(page, /calculation-tooltip/);
   assert.match(css, /\.calculation-value:hover > \.calculation-tooltip/);
@@ -74,11 +74,11 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /Match a scheduled payment\?/);
   assert.match(page, /Scheduled payment/);
   assert.match(page, /This month/);
-  assert.match(page, /Your money,/);
+  assert.match(page, /Make your money last/);
   assert.doesNotMatch(page, /from actual transactions/);
   assert.doesNotMatch(page, /PERIOD INSIGHT|smart-insight/);
   assert.match(page, /Categories/);
-  assert.match(page, /Expected budgets/);
+  assert.match(page, /Category budgets/);
   assert.match(page, /move-money-budget-categories/);
   assert.doesNotMatch(page, /localStorage\.setItem\("move-money-/);
   assert.match(page, /loadMonetaState/);
@@ -131,8 +131,8 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(css, /\.visual-insights-grid > \* \{ min-width: 0;/);
   assert.match(css, /\.trend-bars\.compact/);
   assert.match(page, /const suggestedMonthlyBudget = monthlyLivingMoneyAvailable/);
-  assert.match(page, /left to spread through \$\{data\.planningEndMonth\} ÷ \$\{remainingPlanningMonths\} months/);
-  assert.match(page, /MONEY TO SPREAD/);
+  assert.match(page, /available through \$\{data\.planningEndMonth\} ÷ \$\{remainingPlanningMonths\} months/);
+  assert.match(page, /AVAILABLE AFTER BILLS/);
   assert.match(page, /FIXED PLAN PERIOD/);
   assert.match(page, /Planning end month/);
   assert.match(page, /Over by category/);
@@ -167,7 +167,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(css, /\.transaction-filter-bar/);
   assert.match(page, /budget-capacity-section/);
   assert.match(page, /budget-month-section/);
-  assert.match(page, /Category budget<\/span><CalculationValue/);
+  assert.match(page, /Category budgets<\/span><CalculationValue/);
   assert.doesNotMatch(page, /budget-guide|Regular limit|Marked transactions|Assets only/);
   assert.match(page, /budget-category-balance/);
   assert.match(page, /Existing records will move to a remaining category/);
@@ -191,7 +191,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /view === "settings"/);
   assert.match(page, /Primary display currency/);
   assert.match(page, /Download backup/);
-  assert.match(page, /Moneta never fetches or assumes a rate/);
+  assert.match(page, /Moneta uses only rates you save here/);
   assert.match(stateModel, /displayCurrency: "USD"/);
   assert.match(stateModel, /assets: \[\]/);
   assert.match(stateModel, /monthlyBudgets: \{\}/);

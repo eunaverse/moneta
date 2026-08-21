@@ -14,7 +14,7 @@ test("browser back and forward restore the previous Moneta workspace", async ({ 
   await expect(page).toHaveURL(/\?view=budget$/);
 
   await page.goBack();
-  await expect(page.getByRole("heading", { name: /Your money/, level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make your money last/, level: 1 })).toBeVisible();
   await expect(page).not.toHaveURL(/[?&]view=/);
 
   await page.goForward();

@@ -11,28 +11,25 @@ test("empty account explains the setup path before presenting projections", asyn
   await expect(setupGuide).toContainText("Add scheduled payments");
   await expect(setupGuide).toContainText("Record a transaction");
 
-  await expect(page.getByRole("heading", { name: "This month's category budget" })).toBeVisible();
-  await expect(page.locator(".overview-budget-card")).toContainText("PLAN-SAFE MONTHLY SPEND");
-  await expect(page.locator(".overview-budget-card")).toContainText("MONTHLY CATEGORY BUDGET REMAINING");
+  await expect(page.getByRole("heading", { name: "This month's category budgets" })).toBeVisible();
+  await expect(page.locator(".overview-plan-anchor")).toContainText("SAFE MONTHLY SPEND");
+  await expect(page.locator(".overview-budget-card")).toContainText("No category budget yet");
 });
 
 test("planning terms stay distinct and no-data insights remain neutral", async ({ page }) => {
   await openPrimaryView(page, "Budget");
-  await expect(page.getByText("PLAN-SAFE MONTHLY SPEND", { exact: true })).toBeVisible();
+  await expect(page.getByText("SAFE MONTHLY SPEND", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Monthly category budget" })).toBeVisible();
 
   await openPrimaryView(page, "What-if");
   await expect(page.locator(".scenario-breakdown")).toContainText("Monthly category budget");
 
   await openPrimaryView(page, "Insights");
-  await expect(page.locator(".insight-plan-kicker")).toContainText("PLAN-SAFE MONTHLY SPEND");
-  const action = page.locator(".insight-action-copy");
-  await expect(action).toHaveClass(/empty/);
-  await expect(action).toContainText("No spending data yet");
+  await expect(page.locator(".insight-plan-kicker")).toContainText("SAFE MONTHLY SPEND");
+  const action = page.locator(".insights-empty-state");
+  await expect(action).toContainText("Add a transaction to unlock spending insights");
   await expect(action).not.toContainText("Room under limits");
-  await expect(page.locator(".trend-card")).toHaveClass(/empty/);
-  await expect(page.locator(".trend-card")).toContainText("Record an expense to see a spending trend");
-  await expect(page.locator(".insight-kpis article").filter({ hasText: "OVER LIMIT" })).toHaveClass(/neutral/);
+  await expect(page.locator(".trend-card, .insight-kpis, .over-limit-panel")).toHaveCount(0);
 });
 
 test("language choice honestly discloses partial Korean coverage", async ({ page }) => {
@@ -63,10 +60,10 @@ test("mobile quick add lives in the header and never overlays navigation or dial
 test("key financial labels meet the desktop readability floor", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes("mobile"), "desktop readability regression");
   for (const selector of [
-    ".asset-snapshot span",
-    ".asset-snapshot strong",
-    ".budget-remaining span",
-    ".budget-breakdown span",
+    ".overview-plan-anchor > div:first-child > span",
+    ".overview-plan-anchor p",
+    ".wealth-overview-values span",
+    ".overview-budget-empty span",
   ]) {
     const fontSize = await page.locator(selector).first().evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
     expect(fontSize, selector).toBeGreaterThanOrEqual(12);

@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => openApp(page));
 
 test("new accounts use USD and no sample category budgets or import control", async ({ page }) => {
   await openPrimaryView(page, "Budget");
-  await expect(page.getByLabel(/Expected monthly budgets: \$0/)).toBeVisible();
+  await expect(page.locator(".category-budget-empty")).toContainText("Add your first category budget");
   await expect(page.getByLabel("Housing expected monthly budget")).toHaveCount(0);
 
   await openPrimaryView(page, "Settings");
@@ -49,6 +49,7 @@ test("uses configured foreign currencies for transactions and display totals", a
 
   await openPrimaryView(page, "Transactions");
   const form = page.locator(".transaction-form");
+  await form.getByRole("button", { name: "Enter manually" }).click();
   await form.getByLabel("Description").fill("Transit pass");
   await form.getByLabel("Amount").fill("140000");
   await form.getByLabel("Currency").selectOption("KRW");

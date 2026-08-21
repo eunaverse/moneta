@@ -4,6 +4,7 @@ import { expectNoHorizontalOverflow, openApp, openPrimaryView } from "./helpers"
 test("select controls use one aligned touch-friendly layout", async ({ page }) => {
   await openApp(page);
   await openPrimaryView(page, "Transactions");
+  await page.locator(".transaction-form").getByRole("button", { name: "Enter manually" }).click();
   const transactionSelects = page.locator(".workspace select:visible");
   expect(await transactionSelects.count()).toBeGreaterThan(0);
 
