@@ -8,6 +8,7 @@ import { addMonths, calculatePlanningCapacity, isDueInMonth, isPaidInMonth, mont
 import { createReceiptUrls, loadMonetaState, MonetaStateConflictError, removeReceipt, saveMonetaState, subscribeMonetaState, uploadReceipt, type MonetaStateRecord } from "../lib/moneta-repository";
 import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, normalizeSnapshot, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
 import type { AssetBalance, BudgetState, CategorySort, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "../lib/moneta-types";
+import type { TransactionAiResult, TransactionAiReviewField } from "../lib/transaction-ai";
 
 type View = "overview" | "budget" | "fixed-costs" | "transactions" | "transaction-history" | "categories" | "what-if" | "insights" | "settings";
 type FixedCostFilter = "all" | "monthly" | "one-time";
@@ -15,6 +16,7 @@ type TransactionTypeFilter = "all" | "income" | "expense";
 type TransactionBudgetFilter = "all" | "monthly" | "outside";
 type SelectionScope = "budgets" | "fixed-costs" | "transactions" | "categories";
 type SyncStatus = "loading" | "migration" | "saving" | "saved" | "error";
+type TransactionAiStatus = "idle" | "loading" | "success" | "error";
 type Locale = "en" | "ko";
 type AssetEditorDraft = Pick<BudgetState, "assets" | "exchangeRates" | "monthlyIncome">;
 
@@ -207,6 +209,10 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const [selectedMonth, setSelectedMonth] = useState(localMonthKey);
   const [insightMonths, setInsightMonths] = useState(6);
   const [draft, setDraft] = useState({ date: localDateKey(), type: "expense" as "expense" | "income", category: "Food", description: "", amount: 0, currency: "USD", countsTowardMonthlyBudget: true, linksPlannedPayment: false, plannedPaymentKey: "" });
+  const [transactionAiDescription, setTransactionAiDescription] = useState("");
+  const [transactionAiStatus, setTransactionAiStatus] = useState<TransactionAiStatus>("idle");
+  const [transactionAiMessage, setTransactionAiMessage] = useState("");
+  const [transactionAiReviewFields, setTransactionAiReviewFields] = useState<TransactionAiReviewField[]>([]);
   const [recurringDraft, setRecurringDraft] = useState({ name: "Rent", category: "Housing", amount: 0, intervalMonths: 1, startMonth: localMonthKey(), endMonth: "" });
   const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null);
   const [assetEditorOpen, setAssetEditorOpen] = useState(false);
@@ -778,6 +784,66 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   });
   const visibleMonthEntries = filteredMonthEntries.slice(0, transactionLimit);
   const recentEntries = [...entries].sort((first, second) => second.date.localeCompare(first.date));
+  const clearTransactionAiReviewField = (field: TransactionAiReviewField) => {
+    setTransactionAiReviewFields((current) => current.filter((item) => item !== field));
+  };
+  const analyzeTransactionDraft = async () => {
+    if (!transactionAiDescription.trim() && !receiptFile) return;
+    if (receiptFile && !["image/jpeg", "image/png", "image/webp"].includes(receiptFile.type)) {
+      setTransactionAiStatus("error");
+      setTransactionAiMessage("AI can read JPG, PNG, or WEBP images. You can still attach this image and enter the transaction manually.");
+      return;
+    }
+    if (receiptFile && receiptFile.size > 5 * 1024 * 1024) {
+      setTransactionAiStatus("error");
+      setTransactionAiMessage("The AI image must be 5 MB or smaller. You can still attach images up to 10 MB.");
+      return;
+    }
+
+    setTransactionAiStatus("loading");
+    setTransactionAiMessage("");
+    const form = new FormData();
+    if (transactionAiDescription.trim()) form.set("description", transactionAiDescription.trim());
+    if (receiptFile) form.set("image", receiptFile);
+    form.set("today", localDateKey());
+    form.set("expenseCategories", JSON.stringify(expenseCategories));
+    form.set("incomeCategories", JSON.stringify(incomeCategories));
+    form.set("currencies", JSON.stringify(currencyCodes));
+
+    try {
+      const response = await fetch("/api/transactions/parse", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${account.session.access_token}` },
+        body: form,
+      });
+      const payload = await response.json() as TransactionAiResult | { error?: string };
+      if (!response.ok || !("draft" in payload)) throw new Error("error" in payload && payload.error ? payload.error : "AI could not create a transaction draft.");
+
+      const result = payload as TransactionAiResult;
+      const nextType = result.draft.type || "expense";
+      const allowedCategories = nextType === "expense" ? expenseCategories : incomeCategories;
+      const nextCategory = result.draft.category && allowedCategories.includes(result.draft.category)
+        ? result.draft.category
+        : allowedCategories[0];
+      setDraft({
+        date: result.draft.date || "",
+        type: nextType,
+        category: nextCategory,
+        description: result.draft.description || "",
+        amount: result.draft.amount || 0,
+        currency: result.draft.currency || data.displayCurrency,
+        countsTowardMonthlyBudget: result.draft.countsTowardMonthlyBudget ?? nextCategory !== "Tuition",
+        linksPlannedPayment: false,
+        plannedPaymentKey: "",
+      });
+      if (result.draft.date) setSelectedMonth(result.draft.date.slice(0, 7));
+      setTransactionAiReviewFields(result.needsReview);
+      setTransactionAiStatus("success");
+    } catch (error) {
+      setTransactionAiStatus("error");
+      setTransactionAiMessage(error instanceof Error ? error.message : "AI analysis is temporarily unavailable. Try again.");
+    }
+  };
   const addEntry = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!draft.description.trim() || draft.amount <= 0 || draftNeedsExchangeRate) return;
@@ -819,6 +885,10 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     setEntries((current) => previousEntry ? current.map((item) => item.id === previousEntry.id ? entry : item) : [entry, ...current]);
     setSelectedMonth(entry.date.slice(0, 7));
     setDraft((current) => ({ ...current, description: "", amount: 0, linksPlannedPayment: false, plannedPaymentKey: "" }));
+    setTransactionAiDescription("");
+    setTransactionAiStatus("idle");
+    setTransactionAiMessage("");
+    setTransactionAiReviewFields([]);
     setEditingEntryId(null);
     setReceiptFile(null);
     setReceiptInputKey((current) => current + 1);
@@ -829,6 +899,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   };
   const chooseReceipt = (file?: File) => {
     setReceiptError("");
+    setTransactionAiStatus("idle");
+    setTransactionAiMessage("");
     if (!file) { setReceiptFile(null); return; }
     if (!file.type.startsWith("image/")) { setReceiptError("Choose an image file."); return; }
     if (file.size > 10 * 1024 * 1024) { setReceiptError("The photo must be 10 MB or smaller."); return; }
@@ -849,6 +921,10 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     });
     setReceiptFile(null);
     setReceiptError("");
+    setTransactionAiDescription("");
+    setTransactionAiStatus("idle");
+    setTransactionAiMessage("");
+    setTransactionAiReviewFields([]);
     setSelectedMonth(entry.date.slice(0, 7));
     setSelectionScope(null);
     setSelectedItems([]);
@@ -859,6 +935,10 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     setDraft({ date: localDateKey(), type: "expense", category: expenseCategories[0], description: "", amount: 0, currency: data.displayCurrency, countsTowardMonthlyBudget: true, linksPlannedPayment: false, plannedPaymentKey: "" });
     setReceiptFile(null);
     setReceiptError("");
+    setTransactionAiDescription("");
+    setTransactionAiStatus("idle");
+    setTransactionAiMessage("");
+    setTransactionAiReviewFields([]);
     setReceiptInputKey((current) => current + 1);
   };
   const cancelSelection = () => {
@@ -1151,22 +1231,32 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
           <div className="transaction-layout">
             <form className="transaction-form" onSubmit={addEntry}>
               <div className="card-heading"><div><span>{editingEntryId ? "EDIT ENTRY" : "NEW ENTRY"}</span><h2>{editingEntryId ? "Edit transaction" : "Add a transaction"}</h2></div></div>
+              {!editingEntryId && <section className="transaction-ai-assistant wide" aria-labelledby="transaction-ai-title">
+                <div className="transaction-ai-heading"><div><span>AI-ASSISTED</span><h3 id="transaction-ai-title">{locale === "ko" ? "설명하거나 결제 화면을 올려보세요" : "Describe it or add a payment screenshot"}</h3><p>{locale === "ko" ? "AI가 아래 거래 초안만 채웁니다. 확인 후 저장하기 전에는 거래 내역에 반영되지 않습니다." : "AI fills the editable draft below. Nothing reaches your ledger until you review it and save."}</p></div><i aria-hidden="true">✦</i></div>
+                <label className="transaction-ai-description"><span>{locale === "ko" ? "무엇을 결제했나요?" : "Describe this transaction"}</span><textarea aria-label="Describe this transaction" rows={3} value={transactionAiDescription} placeholder={locale === "ko" ? "예: 어제 Target에서 장보기 42.18달러" : "e.g. Yesterday I bought groceries at Target for $42.18"} onChange={(event) => { setTransactionAiDescription(event.target.value); setTransactionAiStatus("idle"); setTransactionAiMessage(""); }} /></label>
+                <label className="receipt-upload"><span>{locale === "ko" ? "결제 화면 또는 영수증 · 선택" : "Payment screenshot or receipt · optional"}</span><input key={receiptInputKey} type="file" accept="image/*" onChange={(event) => chooseReceipt(event.target.files?.[0])} /><div><i>▣</i><strong>{receiptFile ? receiptFile.name : locale === "ko" ? "사진을 찍거나 이미지를 선택하세요" : "Take a photo or choose an image"}</strong><small>{locale === "ko" ? "AI 판독: JPG, PNG, WEBP · 최대 5 MB" : "AI reads JPG, PNG, WEBP · max 5 MB"}</small></div></label>
+                {receiptError && <p className="receipt-error">{receiptError}</p>}
+                <div className="transaction-ai-actions"><small>{locale === "ko" ? "설명과 이미지는 분석을 위해 OpenAI로 전송됩니다. 저장 전 반드시 금액을 확인하세요." : "Your description and image are sent to OpenAI for analysis. Always verify the amount before saving."}</small><button type="button" disabled={transactionAiStatus === "loading" || (!transactionAiDescription.trim() && !receiptFile)} onClick={() => void analyzeTransactionDraft()}>{transactionAiStatus === "loading" ? "Creating draft…" : "Create AI draft"} <b>→</b></button></div>
+                {transactionAiStatus === "loading" && <div className="transaction-ai-status loading" role="status">Reading the transaction evidence…</div>}
+                {transactionAiStatus === "success" && <div className={`transaction-ai-status success ${transactionAiReviewFields.length > 0 ? "review" : ""}`} role="status">{transactionAiReviewFields.length > 0 ? `AI draft ready. Check: ${transactionAiReviewFields.join(", ")} before saving.` : "AI draft ready. Review every field before saving."}</div>}
+                {transactionAiStatus === "error" && <div className="transaction-ai-status error" role="alert">{transactionAiMessage || "AI analysis is temporarily unavailable. Try again."}</div>}
+              </section>}
               <div className="type-tabs">
-                <button type="button" className={draft.type === "expense" ? "active expense" : ""} onClick={() => setDraft((current) => ({ ...current, type: "expense", category: expenseCategories[0], countsTowardMonthlyBudget: true, linksPlannedPayment: false, plannedPaymentKey: "" }))}>Expense</button>
-                <button type="button" className={draft.type === "income" ? "active income" : ""} onClick={() => { setDraft((current) => ({ ...current, type: "income", category: incomeCategories[0], linksPlannedPayment: false, plannedPaymentKey: "" })); setReceiptFile(null); setReceiptInputKey((current) => current + 1); }}>Income</button>
+                <button type="button" className={draft.type === "expense" ? "active expense" : ""} onClick={() => { clearTransactionAiReviewField("type"); setDraft((current) => ({ ...current, type: "expense", category: expenseCategories[0], countsTowardMonthlyBudget: true, linksPlannedPayment: false, plannedPaymentKey: "" })); }}>Expense</button>
+                <button type="button" className={draft.type === "income" ? "active income" : ""} onClick={() => { clearTransactionAiReviewField("type"); clearTransactionAiReviewField("countsTowardMonthlyBudget"); setDraft((current) => ({ ...current, type: "income", category: incomeCategories[0], linksPlannedPayment: false, plannedPaymentKey: "" })); setReceiptFile(null); setReceiptInputKey((current) => current + 1); }}>Income</button>
               </div>
-              <label><span>Date</span><input type="date" required value={draft.date} onChange={(event) => setDraft((current) => ({ ...current, date: event.target.value }))} /></label>
-              <label><span>Category</span><select value={draft.category} onChange={(event) => { const category = event.target.value; setDraft((current) => ({ ...current, category, countsTowardMonthlyBudget: current.type === "expense" ? category !== "Tuition" : current.countsTowardMonthlyBudget })); }}>{(draft.type === "expense" ? expenseCategories : incomeCategories).map((category) => <option key={category}>{category}</option>)}</select></label>
-              <label className="wide"><span>Description</span><input required placeholder="e.g. Grocery run" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
-              <label><span>Amount</span><input type="text" inputMode="decimal" required value={formatEditableMoney(draft.amount)} placeholder="0" onChange={(event) => setDraft((current) => ({ ...current, amount: parseEditableMoney(event.target.value) }))} /></label>
-              <label><span>Currency</span><select value={draft.currency} onChange={(event) => setDraft((current) => ({ ...current, currency: event.target.value }))}>{currencyCodes.map((currency) => <option key={currency} value={currency}>{currencyLabel(currency)}</option>)}</select></label>
+              <label><span>Date</span><input type="date" required value={draft.date} onChange={(event) => { clearTransactionAiReviewField("date"); setDraft((current) => ({ ...current, date: event.target.value })); }} /></label>
+              <label><span>Category</span><select value={draft.category} onChange={(event) => { clearTransactionAiReviewField("category"); const category = event.target.value; setDraft((current) => ({ ...current, category, countsTowardMonthlyBudget: current.type === "expense" ? category !== "Tuition" : current.countsTowardMonthlyBudget })); }}>{(draft.type === "expense" ? expenseCategories : incomeCategories).map((category) => <option key={category}>{category}</option>)}</select></label>
+              <label className="wide"><span>Description</span><input required placeholder="e.g. Grocery run" value={draft.description} onChange={(event) => { clearTransactionAiReviewField("description"); setDraft((current) => ({ ...current, description: event.target.value })); }} /></label>
+              <label><span>Amount</span><input type="text" inputMode="decimal" required value={formatEditableMoney(draft.amount)} placeholder="0" onChange={(event) => { clearTransactionAiReviewField("amount"); setDraft((current) => ({ ...current, amount: parseEditableMoney(event.target.value) })); }} /></label>
+              <label><span>Currency</span><select value={draft.currency} onChange={(event) => { clearTransactionAiReviewField("currency"); setDraft((current) => ({ ...current, currency: event.target.value })); }}>{currencyCodes.map((currency) => <option key={currency} value={currency}>{currencyLabel(currency)}</option>)}</select></label>
               {draftNeedsExchangeRate && <p className="receipt-error wide" role="alert">Add a positive {draft.currency} per {data.displayCurrency} exchange rate in Settings or Assets before saving.</p>}
-              {draft.type === "expense" && <label className="budget-impact wide"><input type="checkbox" aria-label="Count toward monthly budget" checked={draft.countsTowardMonthlyBudget} onChange={(event) => setDraft((current) => ({ ...current, countsTowardMonthlyBudget: event.target.checked, linksPlannedPayment: event.target.checked ? false : current.linksPlannedPayment, plannedPaymentKey: event.target.checked ? "" : current.plannedPaymentKey }))} /><span aria-hidden="true"><i /></span><div><strong>Include in the monthly budget?</strong><small>{draft.countsTowardMonthlyBudget ? "Yes · reduces this month's flexible budget" : "No · tracked outside the flexible budget"}</small></div></label>}
+              {draft.type === "expense" && <label className="budget-impact wide"><input type="checkbox" aria-label="Count toward monthly budget" checked={draft.countsTowardMonthlyBudget} onChange={(event) => { clearTransactionAiReviewField("countsTowardMonthlyBudget"); setDraft((current) => ({ ...current, countsTowardMonthlyBudget: event.target.checked, linksPlannedPayment: event.target.checked ? false : current.linksPlannedPayment, plannedPaymentKey: event.target.checked ? "" : current.plannedPaymentKey })); }} /><span aria-hidden="true"><i /></span><div><strong>Include in the monthly budget?</strong><small>{draft.countsTowardMonthlyBudget ? "Yes · reduces this month's flexible budget" : "No · tracked outside the flexible budget"}</small></div></label>}
               {draft.type === "expense" && selectablePlannedOccurrences.length > 0 && <label className="budget-impact scheduled-cost-toggle wide"><input type="checkbox" aria-label="Link to a scheduled cost" checked={draft.linksPlannedPayment} onChange={(event) => setDraft((current) => ({ ...current, linksPlannedPayment: event.target.checked, countsTowardMonthlyBudget: event.target.checked ? false : current.countsTowardMonthlyBudget, plannedPaymentKey: event.target.checked ? current.plannedPaymentKey : "" }))} /><span aria-hidden="true"><i /></span><div><strong>Match a scheduled payment?</strong><small>{draft.linksPlannedPayment ? "Yes · prevents reserving it twice" : "No · record as additional spending"}</small></div></label>}
               {draft.type === "expense" && draft.linksPlannedPayment && <label className="wide"><span>Scheduled payment</span><select required value={draft.plannedPaymentKey} onChange={(event) => { const occurrence = selectablePlannedOccurrences.find((item) => item.key === event.target.value); setDraft((current) => ({ ...current, plannedPaymentKey: event.target.value, countsTowardMonthlyBudget: false, ...(occurrence ? { category: occurrence.category, description: current.description || occurrence.name, amount: current.amount || occurrence.amount } : {}) })); }}><option value="">Select a scheduled payment</option>{selectablePlannedOccurrences.map((item) => <option key={item.key} value={item.key}>{item.month} · {item.name} · {money.format(item.amount)}</option>)}</select></label>}
-              {draft.type === "expense" && <label className="receipt-upload wide"><span>Receipt photo · optional</span><input key={receiptInputKey} type="file" accept="image/*" capture="environment" onChange={(event) => chooseReceipt(event.target.files?.[0])} /><div><i>▣</i><strong>{receiptFile ? receiptFile.name : "Take a photo or choose an image"}</strong><small>JPG, PNG, HEIC or another image · max 10 MB</small></div></label>}
-              {receiptError && <p className="receipt-error wide">{receiptError}</p>}
-              <div className="form-actions transaction-form-actions"><button className="submit-button" type="submit" disabled={draftNeedsExchangeRate}>{editingEntryId ? "Save changes" : "Save transaction"} <b>{editingEntryId ? "✓" : "＋"}</b></button>{editingEntryId && <button className="cancel-button" type="button" onClick={cancelEntryEdit}>Cancel</button>}</div>
+              {editingEntryId && draft.type === "expense" && <label className="receipt-upload wide"><span>Receipt photo · optional</span><input key={receiptInputKey} type="file" accept="image/*" onChange={(event) => chooseReceipt(event.target.files?.[0])} /><div><i>▣</i><strong>{receiptFile ? receiptFile.name : "Take a photo or choose an image"}</strong><small>JPG, PNG, HEIC or another image · max 10 MB</small></div></label>}
+              {editingEntryId && receiptError && <p className="receipt-error wide">{receiptError}</p>}
+              <div className="form-actions transaction-form-actions"><button className="submit-button" type="submit" disabled={draftNeedsExchangeRate || transactionAiStatus === "loading" || transactionAiReviewFields.length > 0}>{editingEntryId ? "Save changes" : "Save transaction"} <b>{editingEntryId ? "✓" : "＋"}</b></button>{editingEntryId && <button className="cancel-button" type="button" onClick={cancelEntryEdit}>Cancel</button>}</div>
             </form>
             <article className="transaction-list">
               <div className="card-heading"><div><span>{selectedMonth.replace("-", " · ")}</span><h2>Actual activity</h2></div><div className="activity-heading-actions"><b>{monthEntries.length} entries</b><button type="button" className={selectionScope === "transactions" ? "active" : ""} onClick={() => toggleSelectionMode("transactions")}>{selectionScope === "transactions" ? "Cancel" : "Select"}</button><button type="button" onClick={() => navigate("transaction-history")}>View all →</button></div></div>

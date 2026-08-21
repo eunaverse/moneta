@@ -10,6 +10,7 @@ test("package scripts expose the TDD, full E2E, verification, and PR gates", asy
   const pkg = JSON.parse(await read("package.json"));
 
   assert.equal(pkg.scripts["test:unit"], "node --experimental-strip-types --test tests/*.test.mjs");
+  assert.equal(pkg.scripts["test:ai:live"], "node --experimental-strip-types tests/ai-transaction-live-eval.mjs");
   assert.equal(pkg.scripts["test:e2e"], "playwright test");
   assert.equal(pkg.scripts.verify, "node scripts/change-harness.mjs verify");
   assert.equal(pkg.scripts.pr, "node scripts/change-harness.mjs pr");
@@ -28,15 +29,34 @@ test("the repository documents and automates the mandatory change lifecycle", as
   assert.match(agents, /Red → Green → Refactor/);
   assert.match(agents, /npm run verify/);
   assert.match(agents, /pull request/i);
+  assert.match(agents, /live model output/i);
+  assert.match(agents, /mock[^.]+not[^.]+substitute/i);
   assert.match(harness, /test:unit/);
+  assert.match(harness, /test:ai:live/);
   assert.match(harness, /test:e2e/);
   assert.match(harness, /"pr", "create"/);
   assert.match(harness, /"credential", "fill"/);
   assert.match(harness, /api\.github\.com/);
   assert.match(quality, /pull_request:/);
   assert.match(quality, /npm run verify/);
+  assert.match(quality, /MONETA_TRANSACTION_AI_TOKEN/);
   assert.match(deploy, /npm run verify/);
+  assert.match(deploy, /MONETA_TRANSACTION_AI_TOKEN/);
+  assert.match(deploy, /secrets:\s*\|\s*MONETA_TRANSACTION_AI_TOKEN/);
   assert.match(gitignore, /\.codex-conflict-worktrees\//);
+});
+
+test("every AI feature has an executable live-output eval", async () => {
+  const { aiFeatures } = await import("./ai-feature-inventory.mjs");
+  assert.ok(aiFeatures.length >= 1, "keep a live-eval inventory for AI behavior");
+
+  const ids = new Set();
+  for (const feature of aiFeatures) {
+    assert.ok(feature.id && feature.journey && feature.eval);
+    assert.equal(ids.has(feature.id), false, `duplicate AI feature id: ${feature.id}`);
+    ids.add(feature.id);
+    await access(new URL(feature.eval, root));
+  }
 });
 
 test("every product feature is assigned to an executable E2E spec", async () => {

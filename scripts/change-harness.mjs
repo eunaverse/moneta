@@ -18,6 +18,7 @@ const verify = () => {
     ["npm", ["run", "lint"]],
     ["npm", ["run", "build"]],
     ["npm", ["run", "test:unit"]],
+    ["npm", ["run", "test:ai:live"]],
     ["npm", ["run", "test:e2e"]],
   ];
   for (const [command, args] of steps) run(command, args);
