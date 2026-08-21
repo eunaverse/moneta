@@ -123,6 +123,26 @@ test("preserves itemized receipt allocations when their categories and total are
   assert.equal(result.needsReview.includes("allocations"), false);
 });
 
+test("derives the monthly-budget flag when an itemized expense is otherwise grounded", () => {
+  const result = normalizeTransactionAiDraft({
+    date: "2026-08-18",
+    type: "expense",
+    category: "Shopping",
+    description: "Whole Foods Market",
+    amount: 63.27,
+    currency: "USD",
+    countsTowardMonthlyBudget: null,
+    allocations: [
+      { description: "Fresh produce", category: "Food", amount: 28.1, uncertainFields: [] },
+      { description: "Kitchen storage bin", category: "Shopping", amount: 35.17, uncertainFields: [] },
+    ],
+    uncertainFields: ["countsTowardMonthlyBudget"],
+  }, categories);
+
+  assert.equal(result.draft.countsTowardMonthlyBudget, true);
+  assert.equal(result.needsReview.includes("countsTowardMonthlyBudget"), false);
+});
+
 test("blocks an itemized receipt split when line items do not reconcile to the receipt total", () => {
   const result = normalizeTransactionAiDraft({
     date: "2026-08-19",
