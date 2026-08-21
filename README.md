@@ -3,6 +3,13 @@
 A private multi-currency budget dashboard running on
 [vinext](https://github.com/cloudflare/vinext) and Cloudflare Workers.
 
+The transaction workspace can use Cloudflare Workers AI to turn a purchase
+description or payment screenshot into an editable draft. The server verifies
+the signed-in Supabase access token before inference, validates every model
+field against Moneta's transaction schema, and never saves the draft until the
+user presses **Save transaction**. The Workers AI binding is declared in
+`wrangler.jsonc`; no AI credential is shipped to the browser.
+
 ## Prerequisites
 
 - Node.js `>=22.13.0`
