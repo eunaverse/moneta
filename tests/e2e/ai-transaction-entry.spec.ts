@@ -99,12 +99,15 @@ test("shows a retryable error without changing manually entered transaction fiel
   }));
 
   const form = page.locator(".transaction-form");
+  await form.getByRole("button", { name: "Enter manually" }).click();
   await form.getByLabel("Description").fill("Keep this draft");
   await form.getByLabel("Amount").fill("19.50");
+  await form.getByRole("button", { name: "Describe with AI" }).click();
   await form.getByLabel("Describe this transaction").fill("Coffee shop purchase");
   await form.getByRole("button", { name: "Create AI draft" }).click();
 
   await expect(form.getByRole("alert")).toContainText("temporarily unavailable");
+  await form.getByRole("button", { name: "Enter manually" }).click();
   await expect(form.getByLabel("Description")).toHaveValue("Keep this draft");
   await expect(form.getByLabel("Amount")).toHaveValue("19.5");
 });
@@ -120,6 +123,7 @@ test("keeps the AI assistant usable without horizontal overflow at its layout br
 test("keeps the final review and save action full width on mobile", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile-chromium", "This contract targets the mobile transaction form.");
   const form = page.locator(".transaction-form");
+  await form.getByRole("button", { name: "Enter manually" }).click();
   const actionsBox = await form.locator(".transaction-form-actions").boundingBox();
   const saveBox = await form.getByRole("button", { name: "Save transaction" }).boundingBox();
   expect(actionsBox).not.toBeNull();

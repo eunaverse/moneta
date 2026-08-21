@@ -8,6 +8,7 @@ test.beforeEach(async ({ page }) => {
 
 test("creates, edits, filters, deletes, and restores a transaction", async ({ page }) => {
   const form = page.locator(".transaction-form");
+  await form.getByRole("button", { name: "Enter manually" }).click();
   await form.getByLabel("Description").fill("Groceries");
   await form.getByLabel("Amount").fill("125");
   await form.getByRole("button", { name: /Save transaction/ }).click();

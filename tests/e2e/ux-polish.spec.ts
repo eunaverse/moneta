@@ -12,7 +12,7 @@ test("empty overview gives a direct first transaction action", async ({ page }) 
 
 test("budget separates monthly planning from scheduled payments", async ({ page }) => {
   await openPrimaryView(page, "Budget");
-  await expect(page.getByRole("heading", { name: "Expected budgets" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Category budgets" })).toBeVisible();
   await expect(page.locator(".recurring-form")).toHaveCount(0);
   await page.getByRole("button", { name: "Manage scheduled payments" }).click();
   await expect(page.getByRole("heading", { name: "Scheduled payments", level: 1 })).toBeVisible();
@@ -59,6 +59,6 @@ test("core mobile controls and copy meet touch and readability floors", async ({
   const menuBox = await page.getByRole("button", { name: "Open menu" }).boundingBox();
   expect(menuBox?.width).toBeGreaterThanOrEqual(44);
   expect(menuBox?.height).toBeGreaterThanOrEqual(44);
-  const paragraphSize = await page.locator(".overview-page .clarity-note").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+  const paragraphSize = await page.locator(".overview-title p").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(paragraphSize).toBeGreaterThanOrEqual(16);
 });

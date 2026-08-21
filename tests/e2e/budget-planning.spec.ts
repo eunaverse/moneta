@@ -30,6 +30,7 @@ test("creates a bounded monthly payment, filters it, and links actual spending",
 
   await openPrimaryView(page, "Transactions");
   const form = page.locator(".transaction-form");
+  await form.getByRole("button", { name: "Enter manually" }).click();
   await form.getByLabel("Count toward monthly budget").uncheck();
   await form.getByLabel("Link to a scheduled cost").check();
   await form.getByLabel("Scheduled payment").selectOption({ index: 1 });
