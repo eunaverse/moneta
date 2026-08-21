@@ -274,12 +274,13 @@ const publishCommand = async () => {
     `- Preview: ${previewUrl.origin}\n` +
     `- Worker version: \`${versionId}\`\n` +
     `- Database: isolated preview Supabase project (never production)\n\n` +
-    `The alias is updated after the full quality gate passes. Cloudflare Access may require sign-in.`;
+    `The alias is updated after the full quality gate passes. This URL is public unless Cloudflare Access is separately enabled. Use synthetic data only.`;
   await upsertPreviewComment(body);
   await appendFile(
     required(process.env.GITHUB_STEP_SUMMARY, "GITHUB_STEP_SUMMARY"),
     `## Moneta PR preview\n\n[Open the isolated preview](${previewUrl.origin})\n\n` +
-      `Worker version: \`${versionId}\`\n`,
+      `Worker version: \`${versionId}\`\n\n` +
+      `This URL is public unless Cloudflare Access is separately enabled. Use synthetic data only.\n`,
     "utf8",
   );
   console.log("Published the preview URL to the PR and job summary.");

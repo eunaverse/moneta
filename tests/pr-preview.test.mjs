@@ -62,6 +62,8 @@ test("preview URL publication and close cleanup are first-class workflow behavio
   assert.doesNotMatch(workflow, /github\.event\.pull_request\.base\.sha/);
   assert.match(workflow, /PREVIEW_HEAD_SHA:\s*\$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
   assert.match(helper, /state:\s*"inactive"/);
+  assert.match(helper, /public unless Cloudflare Access is separately enabled/i);
+  assert.match(helper, /synthetic data only/i);
 });
 
 test("Wrangler makes previews explicit and refuses versions without the AI secret", async () => {
