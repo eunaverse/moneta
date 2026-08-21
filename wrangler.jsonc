@@ -4,6 +4,10 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-08-15",
   "compatibility_flags": ["nodejs_compat"],
+  "preview_urls": true,
+  "secrets": {
+    "required": ["MONETA_TRANSACTION_AI_TOKEN"]
+  },
   "observability": {
     "enabled": true
   }

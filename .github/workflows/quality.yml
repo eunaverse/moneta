@@ -2,13 +2,23 @@ name: Full quality gate
 
 on:
   pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - closed
   workflow_dispatch:
+
+concurrency:
+  group: quality-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   verify:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -22,3 +32,137 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run verify
+
+  preview-not-enabled:
+    needs: verify
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.action != 'closed' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        (vars.PR_PREVIEW_ENABLED != 'true' || vars.PR_PREVIEW_ACCESS_REVIEWED != 'true')
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain the external-resource approval gate
+        run: |
+          {
+            echo "## PR preview not enabled"
+            echo
+            echo "The full quality gate passed. Preview upload remains disabled until the isolated Supabase project is approved/configured and the Cloudflare Access review is recorded."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  preview:
+    needs: verify
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.action != 'closed' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        vars.PR_PREVIEW_ENABLED == 'true' &&
+        vars.PR_PREVIEW_ACCESS_REVIEWED == 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
+    environment:
+      name: pr-preview
+      url: ${{ steps.upload.outputs.preview_url }}
+    steps:
+      - name: Check out the verified PR revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate isolated preview configuration
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.PREVIEW_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.PREVIEW_SUPABASE_ANON_KEY }}
+          PREVIEW_SUPABASE_PROJECT_REF: ${{ vars.PR_PREVIEW_SUPABASE_PROJECT_REF }}
+          PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+        run: node scripts/pr-preview.mjs validate
+
+      - name: Build against the preview Supabase project
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.PREVIEW_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.PREVIEW_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Upload a Cloudflare Worker version preview
+        id: upload
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MONETA_TRANSACTION_AI_TOKEN: ${{ secrets.MONETA_TRANSACTION_AI_TOKEN }}
+          VITE_SUPABASE_URL: ${{ secrets.PREVIEW_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.PREVIEW_SUPABASE_ANON_KEY }}
+          PREVIEW_SUPABASE_PROJECT_REF: ${{ vars.PR_PREVIEW_SUPABASE_PROJECT_REF }}
+          PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/pr-preview.mjs upload
+
+      - name: Publish the preview URL
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREVIEW_URL: ${{ steps.upload.outputs.preview_url }}
+          VERSION_ID: ${{ steps.upload.outputs.version_id }}
+        run: node scripts/pr-preview.mjs publish
+
+  cleanup:
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.action == 'closed' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        vars.PR_PREVIEW_ENABLED == 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
+    environment:
+      name: pr-preview
+    steps:
+      - name: Check out trusted cleanup code from the base revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.13.0
+
+      - name: Delete PR-tagged Cloudflare versions and their alias target
+        id: cleanup
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/pr-preview.mjs cleanup
+
+      - name: Mark the preview as closed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          DELETED_COUNT: ${{ steps.cleanup.outputs.deleted_count }}
+          PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/pr-preview.mjs publish-closed
