@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const WORKER_NAME = "moneta";
+const SHARED_PREVIEW_WORKER_NAME = "review-moneta";
 const COMMENT_MARKER = "<!-- moneta-pr-preview -->";
 
 const required = (value, name) => {
@@ -20,9 +21,7 @@ export function previewAlias(prNumber) {
   return `pr-${value}`;
 }
 
-export function previewWorkerName(prNumber) {
-  return `${previewAlias(prNumber)}-${WORKER_NAME}`;
-}
+export const sharedPreviewWorkerName = () => SHARED_PREVIEW_WORKER_NAME;
 
 const previewTag = (prNumber) => `moneta-${previewAlias(prNumber)}`;
 
@@ -66,7 +65,7 @@ export function parsePreviewDeploy(output, workerName) {
     });
   const upload = entries.findLast((entry) => entry.type === "deploy");
   if (!upload?.version_id || upload.worker_name !== workerName || !Array.isArray(upload.targets)) {
-    throw new Error("Wrangler did not return the expected PR-scoped Worker deployment.");
+    throw new Error("Wrangler did not return the expected shared preview Worker deployment.");
   }
 
   const target = upload.targets.find((value) => {
@@ -83,7 +82,7 @@ export function parsePreviewDeploy(output, workerName) {
     }
   });
   if (!target) {
-    throw new Error("Wrangler did not return the PR-scoped Worker URL.");
+    throw new Error("Wrangler did not return the shared preview Worker URL.");
   }
 
   const previewUrl = new URL(target);
@@ -132,12 +131,24 @@ export const createCloudflareRequest = ({ fetchImpl = fetch, environment = proce
 
 const cloudflareRequest = createCloudflareRequest();
 
-export const deletePreviewWorker = async (prNumber, request = cloudflareRequest) => {
-  const result = await request(`/workers/scripts/${encodeURIComponent(previewWorkerName(prNumber))}`, {
+export const deleteSharedPreviewWorkerIfOwned = async (prNumber, request = cloudflareRequest) => {
+  const expectedTag = previewTag(prNumber);
+  const workerPath = `/workers/scripts/${encodeURIComponent(SHARED_PREVIEW_WORKER_NAME)}`;
+  const settings = await request(`${workerPath}/settings`, {
+    allowErrorCodes: [10007],
+  });
+  if (settings.notFound) return { deletedCount: 0, status: "absent" };
+  if (settings.result?.annotations?.["workers/tag"] !== expectedTag) {
+    return { deletedCount: 0, status: "not-owner" };
+  }
+
+  const result = await request(workerPath, {
     method: "DELETE",
     allowErrorCodes: [10007],
   });
-  return result.notFound ? 0 : 1;
+  return result.notFound
+    ? { deletedCount: 0, status: "absent" }
+    : { deletedCount: 1, status: "deleted" };
 };
 
 const writeOutputs = async (values) => {
@@ -159,7 +170,7 @@ const validateCommand = () => {
 const uploadCommand = async () => {
   validateCommand();
   const prNumber = required(process.env.PR_NUMBER, "PR_NUMBER");
-  const workerName = previewWorkerName(prNumber);
+  const workerName = SHARED_PREVIEW_WORKER_NAME;
   const sha = required(process.env.PREVIEW_HEAD_SHA, "PREVIEW_HEAD_SHA").slice(0, 12);
   const configPath = "dist/server/wrangler.json";
   await readFile(configPath, "utf8");
@@ -253,22 +264,24 @@ const deactivatePreviewDeployments = async () => {
 
 const publishCommand = async () => {
   const previewUrl = new URL(required(process.env.PREVIEW_URL, "PREVIEW_URL"));
-  const expectedPrefix = `${previewWorkerName(process.env.PR_NUMBER)}.`;
+  const prNumber = previewAlias(process.env.PR_NUMBER).slice(3);
+  const expectedPrefix = `${SHARED_PREVIEW_WORKER_NAME}.`;
   if (!previewUrl.hostname.startsWith(expectedPrefix) || !previewUrl.hostname.endsWith(".workers.dev")) {
-    throw new Error("PREVIEW_URL is not the PR-scoped Moneta Worker.");
+    throw new Error("PREVIEW_URL is not the shared preview Worker.");
   }
   const versionId = required(process.env.VERSION_ID, "VERSION_ID");
   const body = `${COMMENT_MARKER}\n## Moneta PR preview\n\n` +
     `- Preview: ${previewUrl.origin}\n` +
+    `- Active PR: #${prNumber}\n` +
     `- Worker version: \`${versionId}\`\n` +
     `- Database: isolated preview Supabase project (never production)\n\n` +
-    `The PR-scoped Worker is updated after the full quality gate passes. This URL is public unless Cloudflare Access is separately enabled. Use synthetic data only.`;
+    `This shared Worker was updated after the full quality gate and manual deployment approval. A later approved PR replaces what this same URL serves. This URL is public unless Cloudflare Access is separately enabled. Use synthetic data only.`;
   await upsertPreviewComment(body);
   await appendFile(
     required(process.env.GITHUB_STEP_SUMMARY, "GITHUB_STEP_SUMMARY"),
     `## Moneta PR preview\n\n[Open the isolated preview](${previewUrl.origin})\n\n` +
-      `Worker version: \`${versionId}\`\n\n` +
-      `This URL is public unless Cloudflare Access is separately enabled. Use synthetic data only.\n`,
+      `Active PR: #${prNumber}\n\nWorker version: \`${versionId}\`\n\n` +
+      `A later approved PR replaces what this same URL serves. This URL is public unless Cloudflare Access is separately enabled. Use synthetic data only.\n`,
     "utf8",
   );
   console.log("Published the preview URL to the PR and job summary.");
@@ -276,23 +289,32 @@ const publishCommand = async () => {
 
 const cleanupCommand = async () => {
   const prNumber = required(process.env.PR_NUMBER, "PR_NUMBER");
-  const deletedCount = await deletePreviewWorker(prNumber);
-  await writeOutputs({ deleted_count: deletedCount });
-  console.log(deletedCount
-    ? `Deleted the ${previewWorkerName(prNumber)} preview Worker.`
-    : `The ${previewWorkerName(prNumber)} preview Worker was already absent.`);
+  const result = await deleteSharedPreviewWorkerIfOwned(prNumber);
+  await writeOutputs({ deleted_count: result.deletedCount, cleanup_status: result.status });
+  if (result.status === "deleted") {
+    console.log(`Deleted the ${SHARED_PREVIEW_WORKER_NAME} shared preview Worker owned by PR #${prNumber}.`);
+  } else if (result.status === "not-owner") {
+    console.log(`PR #${prNumber} is not the active shared preview owner; leaving ${SHARED_PREVIEW_WORKER_NAME} unchanged.`);
+  } else {
+    console.log(`The ${SHARED_PREVIEW_WORKER_NAME} shared preview Worker was already absent.`);
+  }
 };
 
 const publishClosedCommand = async () => {
-  const deletedCount = Number(process.env.DELETED_COUNT ?? 0);
+  const cleanupStatus = process.env.CLEANUP_STATUS ?? (Number(process.env.DELETED_COUNT ?? 0) ? "deleted" : "absent");
   await deactivatePreviewDeployments();
+  const cleanupDescription = cleanupStatus === "deleted"
+    ? "This PR owned the active shared Worker, so it was deleted."
+    : cleanupStatus === "not-owner"
+      ? "A different approved PR owns the shared Worker, so it was left unchanged."
+      : "The shared Worker was already absent.";
   const body = `${COMMENT_MARKER}\n## Moneta PR preview closed\n\n` +
-    `The PR preview is no longer active. The PR-scoped Cloudflare Worker was ${deletedCount ? "deleted" : "already absent"}. ` +
+    `${cleanupDescription} ` +
     `The shared preview Supabase project remains isolated from production and contains no production data.`;
   await upsertPreviewComment(body);
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   if (summaryPath) {
-    await appendFile(summaryPath, `## Moneta PR preview cleanup\n\nPR-scoped Worker ${deletedCount ? "deleted" : "already absent"}.\n`, "utf8");
+    await appendFile(summaryPath, `## Moneta PR preview cleanup\n\n${cleanupDescription}\n`, "utf8");
   }
 };
 
