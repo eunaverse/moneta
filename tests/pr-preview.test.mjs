@@ -7,7 +7,7 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 
-test("PR preview waits for the full gate and deploys only a PR-scoped Worker", async () => {
+test("PR preview waits for the full gate and serializes approved deploys to one shared Worker", async () => {
   const [workflow, helper] = await Promise.all([
     read(".github/workflows/quality.yml"),
     read("scripts/pr-preview.mjs"),
@@ -22,10 +22,13 @@ test("PR preview waits for the full gate and deploys only a PR-scoped Worker", a
   assert.match(workflow, /head\.repo\.full_name == github\.repository/);
   assert.match(workflow, /vars\.PR_PREVIEW_ENABLED == 'true'/);
   assert.match(workflow, /vars\.PR_PREVIEW_ACCESS_REVIEWED == 'true'/);
+  assert.match(workflow, /group:\s*moneta-shared-pr-preview/);
+  assert.match(workflow, /cancel-in-progress:\s*false/);
   assert.doesNotMatch(workflow, /pull_request_target/);
   assert.match(helper, /"deploy"/);
   assert.match(helper, /--name/);
-  assert.match(helper, /previewWorkerName/);
+  assert.match(helper, /SHARED_PREVIEW_WORKER_NAME = "review-moneta"/);
+  assert.doesNotMatch(helper, /previewWorkerName/);
   assert.doesNotMatch(helper, /versions", "upload/);
   assert.doesNotMatch(helper, /--preview-alias/);
 });
@@ -62,7 +65,10 @@ test("preview URL publication and close cleanup are first-class workflow behavio
   assert.match(workflow, /github\.event\.repository\.default_branch/);
   assert.doesNotMatch(workflow, /github\.event\.pull_request\.base\.sha/);
   assert.match(workflow, /PREVIEW_HEAD_SHA:\s*\$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
+  const cleanupJob = workflow.slice(workflow.indexOf("\n  cleanup:"));
+  assert.doesNotMatch(cleanupJob, /environment:\s*\n\s+name:\s*pr-preview/);
   assert.match(helper, /state:\s*"inactive"/);
+  assert.match(helper, /not the active shared preview owner/i);
   assert.match(helper, /public unless Cloudflare Access is separately enabled/i);
   assert.match(helper, /synthetic data only/i);
 });
@@ -75,18 +81,18 @@ test("Wrangler makes previews explicit and refuses versions without the AI secre
   assert.deepEqual(config.secrets?.required, ["MONETA_TRANSACTION_AI_TOKEN"]);
 });
 
-test("preview helpers validate project identity and accept only the PR-scoped Worker deploy target", async () => {
+test("preview helpers validate project identity and clean up the shared Worker only for its active PR", async () => {
   const {
     createCloudflareRequest,
-    deletePreviewWorker,
+    deleteSharedPreviewWorkerIfOwned,
     parsePreviewDeploy,
     previewAlias,
-    previewWorkerName,
+    sharedPreviewWorkerName,
     validatePreviewSupabase,
   } = await import("../scripts/pr-preview.mjs");
 
   assert.equal(previewAlias("42"), "pr-42");
-  assert.equal(previewWorkerName("42"), "pr-42-moneta");
+  assert.equal(sharedPreviewWorkerName(), "review-moneta");
   assert.throws(() => previewAlias("not-a-number"), /PR number/);
   assert.deepEqual(validatePreviewSupabase({
     url: "https://previewref.supabase.co",
@@ -109,31 +115,43 @@ test("preview helpers validate project identity and accept only the PR-scoped Wo
 
   const upload = parsePreviewDeploy(`${JSON.stringify({
     type: "deploy",
-    worker_name: "pr-42-moneta",
+    worker_name: "review-moneta",
     version_id: "version-42",
-    targets: ["https://pr-42-moneta.example.workers.dev"],
-  })}\n`, "pr-42-moneta");
+    targets: ["https://review-moneta.example.workers.dev"],
+  })}\n`, "review-moneta");
   assert.equal(upload.versionId, "version-42");
-  assert.equal(upload.previewUrl, "https://pr-42-moneta.example.workers.dev");
+  assert.equal(upload.previewUrl, "https://review-moneta.example.workers.dev");
 
   assert.throws(() => parsePreviewDeploy(`${JSON.stringify({
     type: "deploy",
     worker_name: "moneta",
     version_id: "production-version",
     targets: ["https://moneta.example.workers.dev"],
-  })}\n`, "pr-42-moneta"), /PR-scoped Worker/);
+  })}\n`, "review-moneta"), /shared preview Worker/);
 
   const requests = [];
-  assert.equal(await deletePreviewWorker("42", async (path, options) => {
+  const responses = [{
+    result: { annotations: { "workers/tag": "moneta-pr-42" } },
+  }, {}];
+  assert.deepEqual(await deleteSharedPreviewWorkerIfOwned("42", async (path, options) => {
     requests.push({ path, options });
-    return {};
-  }), 1);
+    return responses.shift();
+  }), { deletedCount: 1, status: "deleted" });
   assert.deepEqual(requests, [{
-    path: "/workers/scripts/pr-42-moneta",
+    path: "/workers/scripts/review-moneta/settings",
+    options: { allowErrorCodes: [10007] },
+  }, {
+    path: "/workers/scripts/review-moneta",
     options: { method: "DELETE", allowErrorCodes: [10007] },
   }]);
 
-  assert.equal(await deletePreviewWorker("42", async () => ({ notFound: true })), 0);
+  assert.deepEqual(await deleteSharedPreviewWorkerIfOwned("42", async () => ({
+    result: { annotations: { "workers/tag": "moneta-pr-43" } },
+  })), { deletedCount: 0, status: "not-owner" });
+  assert.deepEqual(await deleteSharedPreviewWorkerIfOwned("42", async () => ({ notFound: true })), {
+    deletedCount: 0,
+    status: "absent",
+  });
 
   const request = createCloudflareRequest({
     environment: {
@@ -145,11 +163,10 @@ test("preview helpers validate project identity and accept only the PR-scoped Wo
       errors: [{ code: 10007, message: "Worker not found" }],
     }), { status: 404, headers: { "content-type": "application/json" } }),
   });
-  assert.deepEqual(await request("/workers/scripts/pr-42-moneta", {
-    method: "DELETE",
+  assert.deepEqual(await request("/workers/scripts/review-moneta/settings", {
     allowErrorCodes: [10007],
   }), { notFound: true });
-  await assert.rejects(request("/workers/scripts/pr-42-moneta", { method: "DELETE" }), /404.*10007/);
+  await assert.rejects(request("/workers/scripts/review-moneta/settings"), /404.*10007/);
 });
 
 test("the temporary Wrangler secret file is private and always removed", async () => {
@@ -178,23 +195,27 @@ test("the runbook documents cost approval, narrow OAuth redirects, empty data, A
   assert.match(runbook, /\$0\.01344 per hour/);
   assert.match(runbook, /Spend Cap/);
   assert.match(runbook, /explicit approval/i);
-  assert.match(runbook, /https:\/\/pr-\*-moneta\.<workers-dev-subdomain>\.workers\.dev\/\*\*/);
+  assert.match(runbook, /https:\/\/review-moneta\.<workers-dev-subdomain>\.workers\.dev\/\*\*/);
   assert.match(runbook, /https:\/\/<preview-project-ref>\.supabase\.co\/auth\/v1\/callback/);
   assert.match(runbook, /production data/i);
   assert.match(runbook, /synthetic|empty/i);
   assert.match(runbook, /Cloudflare Access/);
-  assert.match(runbook, /protect the `pr-\*-moneta/);
+  assert.match(runbook, /protect the `review-moneta/);
   assert.match(runbook, /payment method/i);
   assert.match(runbook, /overage/i);
   assert.match(runbook, /Access was not activated/i);
   assert.match(runbook, /public preview/i);
   assert.match(runbook, /PR_PREVIEW_ACCESS_REVIEWED=true/);
   assert.match(runbook, /PR.*closed/i);
-  assert.match(runbook, /PR-scoped Worker/i);
-  assert.match(runbook, /wrangler deploy --name/i);
+  assert.match(runbook, /required reviewer/i);
+  assert.match(runbook, /Approve and deploy/i);
+  assert.match(runbook, /one active preview/i);
+  assert.match(runbook, /wrangler deploy --name review-moneta/i);
+  assert.match(runbook, /workers\/tag/i);
   assert.doesNotMatch(runbook, /Deleting every tagged target version/i);
   assert.match(readme, /PR preview/);
   assert.match(readme, /PR_PREVIEW_ENABLED/);
-  assert.match(readme, /PR-scoped Worker/i);
+  assert.match(readme, /review-moneta/i);
+  assert.match(readme, /manual approval/i);
   assert.doesNotMatch(readme, /never runs `wrangler deploy`/i);
 });
