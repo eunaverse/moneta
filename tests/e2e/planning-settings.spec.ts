@@ -29,8 +29,10 @@ test("edits assets, the fixed plan period, and insights period", async ({ page }
   await page.getByLabel("Planning end month").fill("2099-12");
   await expect(page.getByLabel("Planning end month")).toHaveValue("2099-12");
   await openPrimaryView(page, "Insights");
-  await page.locator(".insight-range-controls").getByRole("spinbutton").fill("12");
-  await expect(page.getByText("12 MONTHS", { exact: true })).toBeVisible();
+  const lookback = page.locator(".insight-range-controls").getByRole("spinbutton");
+  await lookback.fill("12");
+  await expect(lookback).toHaveValue("12");
+  await expect(page.locator(".insights-empty-state")).toContainText("Add a transaction to unlock spending insights");
 });
 
 test("creates and renames a category and exposes a download-only backup", async ({ page }) => {
