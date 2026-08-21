@@ -12,6 +12,7 @@
     "deploy": "npm run build && wrangler deploy --config dist/server/wrangler.json",
     "test": "npm run verify",
     "test:unit": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test:ai:live": "node --experimental-strip-types tests/ai-transaction-live-eval.mjs",
     "test:e2e": "playwright test",
     "verify": "node scripts/change-harness.mjs verify",
     "pr": "node scripts/change-harness.mjs pr",

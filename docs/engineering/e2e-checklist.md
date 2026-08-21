@@ -27,4 +27,4 @@ This checklist protects every user-facing workspace, its important state changes
 
 ## Release gate
 
-`npm run verify` must pass lint, production build, all Node unit/contract tests, and all Playwright tests. Pull requests and production deployment run the same command.
+`npm run verify` must pass lint, production build, all Node unit/contract tests, every required live AI output eval, and all Playwright tests. Pull requests and production deployment run the same command.
