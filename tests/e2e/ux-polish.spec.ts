@@ -21,8 +21,10 @@ test("budget separates monthly planning from scheduled payments", async ({ page 
 
 test("money fields format large values and use explicit save copy", async ({ page }) => {
   await page.getByRole("button", { name: "Edit assets" }).click();
-  const dialog = page.getByRole("dialog", { name: "Edit assets & income" });
-  const primaryAccount = dialog.getByLabel("Primary KRW account");
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("Savings");
+  const primaryAccount = dialog.getByLabel("Asset 1 amount");
   await primaryAccount.fill("76000000");
   await expect(primaryAccount).toHaveValue("76,000,000");
   await expect(dialog.getByRole("button", { name: "Save balances" })).toBeVisible();

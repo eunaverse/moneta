@@ -54,7 +54,7 @@ test("mobile quick add lives in the header and never overlays navigation or dial
   await page.getByRole("button", { name: "Close menu" }).click();
 
   await page.getByRole("button", { name: "Edit assets" }).click();
-  const dialog = page.getByRole("dialog", { name: "Edit assets & income" });
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
   await expect(dialog).toBeVisible();
   await expect(quickAdd).toBeHidden();
   await expect(dialog.getByRole("button", { name: "Save balances" })).toBeVisible();

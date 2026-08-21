@@ -61,6 +61,8 @@ button { cursor: pointer; }
 .asset-snapshot div { padding: 10px; border: 1px solid #4a4066; border-radius: 10px; background: #ffffff09; }
 .asset-snapshot span { display: block; color: #aaa1bd; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
 .asset-snapshot strong { display: block; margin-top: 5px; color: #fff; font-size: 14px; }
+.asset-snapshot small { display: block; margin-top: 5px; color: #bfb6d0; font-size: 11px; }
+.asset-snapshot .asset-snapshot-empty { grid-column: 1 / -1; }
 .wealth-progress-card { padding: 30px; }
 .wealth-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .wealth-card-heading h2 { margin: 8px 0 0; font-size: 23px; letter-spacing: -.03em; }
@@ -166,6 +168,7 @@ button { cursor: pointer; }
 .overview-transaction-row span strong { font-size: 13px; }
 .overview-transaction-row span small { margin-top: 4px; color: var(--muted); font-size: 11px; }
 .overview-transaction-row > b { font-size: 13px; }
+.overview-transaction-row > b small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; text-align: right; }
 .overview-transaction-row > b.expense { color: var(--coral); }
 .overview-transaction-row > b.income { color: #128564; }
 .preview-empty { display: grid; justify-items: center; gap: 7px; padding: 32px 18px 14px; color: var(--muted); text-align: center; }
@@ -553,7 +556,20 @@ button { cursor: pointer; }
 .modal-heading p { margin: 7px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
 .modal-heading > button { width: 34px; height: 34px; border: 0; border-radius: 9px; background: #f0eef6; color: #6c6677; font-size: 20px; }
 .asset-editor .input-grid { margin-top: 25px; }
+.asset-editor-list { display: grid; gap: 10px; margin-top: 24px; }
+.asset-editor-row { display: grid; grid-template-columns: minmax(120px, 1.3fr) minmax(110px, .8fr) minmax(145px, 1fr) 36px; gap: 8px; align-items: end; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: #fbfafe; }
+.asset-editor-row label > span, .asset-rate-section label > span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 9px; font-weight: 850; letter-spacing: .08em; }
+.asset-editor-row input, .asset-editor-row select, .asset-rate-section input { min-width: 0; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; outline: 0; background: #fff; color: var(--ink); font-weight: 700; }
+.asset-editor-row > button { width: 36px; height: 40px; border: 1px solid #e3b9b2; border-radius: 8px; background: #fff2ef; color: #a73525; font-size: 18px; }
+.add-asset-button { min-height: 44px; padding: 10px 13px; border: 1px dashed #bdb4e4; border-radius: 10px; background: #f5f1ff; color: var(--purple-dark); font-weight: 800; }
+.asset-rate-section { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(220px, 1.3fr); gap: 18px; margin-top: 20px; padding: 16px; border: 1px solid #d9d1f7; border-radius: 12px; background: #f8f5ff; }
+.asset-rate-section > div:first-child > span { color: var(--purple); font-size: 10px; font-weight: 850; letter-spacing: .1em; }
+.asset-rate-section p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.asset-rate-section > div:last-child { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.asset-rate-warning { margin: 10px 0 0; padding: 9px 11px; border-radius: 8px; background: #fff0ec; color: #a73525; font-size: 11px; font-weight: 750; }
+.asset-income { margin-top: 18px; }
 .modal-done { width: 100%; margin-top: 20px; padding: 12px; border: 0; border-radius: 9px; background: var(--purple); color: #fff; font-weight: 750; }
+.modal-done:disabled { cursor: not-allowed; opacity: .4; }
 .receipt-viewer > button { position: fixed; top: 24px; right: 28px; width: 40px; height: 40px; border: 1px solid #ffffff44; border-radius: 50%; background: #171329; color: #fff; font-size: 23px; }
 .receipt-viewer > img { max-width: min(920px, 100%); max-height: calc(100vh - 60px); border-radius: 14px; object-fit: contain; box-shadow: 0 24px 80px #0008; }
 
@@ -725,6 +741,7 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .wealth-overview-heading strong { display: block; margin-top: 12px; font-size: clamp(42px, 6vw, 72px); letter-spacing: -.055em; }
 .wealth-overview-heading small { display: block; margin-top: 5px; color: #b5acc8; font-size: 13px; }
 .wealth-overview-heading button { min-height: 44px; padding: 10px 15px; border: 1px solid #65568a; border-radius: 10px; background: #ffffff0d; color: #fff; font-size: 12px; font-weight: 750; }
+.exchange-rate-warning { width: 100%; margin-top: 18px; padding: 11px 13px; border: 1px solid #f2c26b; border-radius: 10px; background: #fff5d6; color: #7f5c00; text-align: left; font-size: 12px; font-weight: 800; }
 .wealth-overview-card .wealth-track { margin-top: 34px; background: #f26b4f; }
 .wealth-overview-card .wealth-track > i { background: linear-gradient(90deg, #8c74f2, #b399ff); }
 .wealth-overview-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; }
@@ -810,10 +827,11 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .settings-grid article > div:nth-child(2) > span { color: var(--purple); font-size: 11px; font-weight: 850; letter-spacing: .12em; }
 .settings-grid h2 { margin: 6px 0 0; font-size: 18px; }
 .settings-grid p { margin: 6px 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
-.settings-grid article > button, .settings-data > div:last-child > button, .import-button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: #faf9fd; color: var(--purple-dark); font-size: 12px; font-weight: 800; text-decoration: none; }
+.settings-grid article > button, .settings-data > div:last-child > button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: #faf9fd; color: var(--purple-dark); font-size: 12px; font-weight: 800; text-decoration: none; }
 .settings-inline > label { display: flex; align-items: center; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fbfafe; }
 .settings-inline > label input { min-width: 70px; width: 80px; border: 0; background: transparent; font-weight: 800; }
 .settings-inline > label span { color: var(--muted); font-size: 10px; }
+.settings-inline > label select { min-width: 200px; max-width: 100%; padding: 8px 30px 8px 10px; border: 0; outline: 0; background: transparent; color: var(--ink); font-weight: 800; }
 .settings-grid > article.planning-period-setting { grid-column: 1 / -1; grid-template-columns: 48px minmax(0, 1fr) auto; }
 .planning-period-inputs { display: grid; grid-template-columns: repeat(2, minmax(145px, 1fr)); gap: 8px; }
 .planning-period-inputs label { display: grid; gap: 5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fbfafe; }
@@ -821,8 +839,15 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .planning-period-inputs input { min-width: 0; width: 145px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 11px; font-weight: 800; }
 .planning-period-inputs label:focus-within { border-color: var(--purple); box-shadow: 0 0 0 3px #7057e819; }
 .settings-data > div:last-child { display: flex; gap: 8px; }
-.import-button { cursor: pointer; }
-.import-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.settings-data.exchange-rate-settings > div.exchange-rate-editor { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.exchange-rate-editor label { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(90px, 140px) 36px; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fbfafe; }
+.exchange-rate-editor label > span { color: var(--muted); font-size: 11px; font-weight: 800; }
+.exchange-rate-editor label > input { min-width: 0; width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-weight: 800; }
+.exchange-rate-editor label > button { width: 36px; height: 36px; border: 1px solid #e3b9b2; border-radius: 8px; background: #fff2ef; color: #a73525; font-size: 17px; }
+.exchange-rate-editor label > button:disabled { cursor: not-allowed; opacity: .35; }
+.exchange-rate-add { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 8px; }
+.exchange-rate-add select { min-width: 0; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); font-weight: 750; }
+.exchange-rate-add button { min-height: 44px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 9px; background: #f2efff; color: var(--purple-dark); font-weight: 800; }
 .language-options { display: grid; grid-template-columns: minmax(88px, .8fr) minmax(150px, 1.2fr); gap: 8px; }
 .language-options button { min-height: 44px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--muted); font-size: 12px; font-weight: 800; }
 .language-options button.active { border-color: var(--purple); background: #f1edff; color: var(--purple-dark); box-shadow: 0 0 0 2px #7057e814; }
@@ -980,6 +1005,16 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   .insight-action-copy { grid-template-columns: 1fr; }
   .undo-toast { grid-template-columns: 1fr auto; }
   .undo-toast > .undo-close { display: none; }
+  .modal-backdrop { padding: 10px; }
+  .asset-editor { max-height: calc(100vh - 20px); padding: 20px; }
+  .asset-editor-row { grid-template-columns: minmax(0, 1fr) 40px; }
+  .asset-editor-row label { grid-column: 1 / -1; }
+  .asset-editor-row > button { grid-column: 2; grid-row: 1; justify-self: end; }
+  .asset-rate-section { grid-template-columns: 1fr; }
+  .asset-rate-section > div:last-child { grid-template-columns: 1fr; }
+  .settings-data.exchange-rate-settings > div.exchange-rate-editor { grid-template-columns: 1fr; }
+  .exchange-rate-editor label { grid-template-columns: minmax(80px, 1fr) minmax(80px, 1fr) 36px; }
+  .exchange-rate-add { grid-template-columns: 1fr; }
 }
 
 /* Calmer surfaces keep attention on financial decisions rather than decoration. */

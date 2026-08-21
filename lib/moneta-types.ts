@@ -1,11 +1,16 @@
 export type CategorySort = "manual" | "budget-desc" | "alphabetical" | "spent-desc" | "spent-asc";
 
+export type AssetBalance = {
+  id: string;
+  name: string;
+  amount: number;
+  currency: string;
+};
+
 export type BudgetState = {
-  krwPrimary: number;
-  krwSecondary: number;
-  krwEmergency: number;
-  usdCash: number;
-  exchangeRate: number;
+  assets: AssetBalance[];
+  displayCurrency: string;
+  exchangeRates: Record<string, number>;
   planningStartMonth: string;
   planningEndMonth: string;
   planningMonths?: number;
@@ -19,7 +24,7 @@ export type LedgerEntry = {
   category: string;
   description: string;
   amount: number;
-  currency: "USD" | "KRW";
+  currency: string;
   countsTowardMonthlyBudget?: boolean;
   plannedExpenseId?: string;
   plannedExpenseMonth?: string;
@@ -40,7 +45,7 @@ export type RecurringExpense = {
 };
 
 export type MonetaSnapshot = {
-  version: 1;
+  version: 2;
   data: BudgetState;
   entries: LedgerEntry[];
   monthlyBudgets: MonthlyBudgets;
