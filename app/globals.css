@@ -1152,6 +1152,25 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .insights-empty-copy > strong { display: block; margin-top: 8px; font-size: 20px; line-height: 1.25; }
 .insights-empty-copy > p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .insights-empty-copy > button { min-height: 44px; margin-top: 15px; padding: 10px 14px; border: 0; border-radius: 10px; background: var(--purple); color: #fff; font-size: 12px; font-weight: 850; }
+.insights-preview { margin-top: 20px; padding: 26px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+.insights-preview-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+.insights-preview-heading span, .insights-preview-trend span, .insights-preview-signals span { color: var(--purple); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
+.insights-preview-heading h2 { max-width: 650px; margin-top: 7px; font-size: 22px; line-height: 1.2; }
+.insights-preview-heading p { max-width: 280px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; text-align: right; }
+.insights-preview-layout { min-width: 0; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(250px, .65fr); gap: 16px; margin-top: 20px; }
+.insights-preview-trend, .insights-preview-signals article { min-width: 0; padding: 20px; border: 1px solid #e1dde9; border-radius: 14px; background: #faf9fc; }
+.insights-preview-trend { min-height: 210px; display: grid; grid-template-columns: minmax(180px, .72fr) minmax(220px, 1.28fr); gap: 28px; align-items: center; }
+.insights-preview-trend strong, .insights-preview-signals strong { display: block; margin-top: 8px; font-size: 17px; line-height: 1.3; }
+.insights-preview-trend small, .insights-preview-signals small { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.insights-preview-bars { height: 118px; display: flex; align-items: end; gap: 12px; padding: 10px 8px 0; border-bottom: 1px solid #d9d4e2; }
+.insights-preview-bars i { flex: 1; min-width: 8px; border-radius: 6px 6px 0 0; background: #d7d1e5; }
+.insights-preview-bars i:nth-child(1) { height: 34%; }
+.insights-preview-bars i:nth-child(2) { height: 62%; }
+.insights-preview-bars i:nth-child(3) { height: 45%; }
+.insights-preview-bars i:nth-child(4) { height: 78%; background: #b8ace8; }
+.insights-preview-bars i:nth-child(5) { height: 56%; }
+.insights-preview-bars i:nth-child(6) { height: 88%; background: #8c78df; }
+.insights-preview-signals { display: grid; grid-template-rows: 1fr 1fr; gap: 12px; }
 
 .settings-save-note { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border-radius: 999px; background: #e7f8f2; color: #117d5e; font-size: 12px; font-weight: 800; white-space: nowrap; }
 
@@ -1162,13 +1181,15 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   .mobile-current-page { max-width: none; overflow: visible; font-size: 12px; text-overflow: clip; }
   .overview-title h1 { font-size: 39px; }
   .overview-title p { font-size: 16px; }
-  .overview-plan-anchor, .insights-empty-state { grid-template-columns: 1fr; }
+  .overview-plan-anchor, .insights-empty-state, .insights-preview-layout { grid-template-columns: 1fr; }
   .overview-plan-period { padding-top: 18px; padding-left: 0; border-top: 1px solid #d6cef6; border-left: 0; }
   .transaction-entry-method { grid-template-columns: 1fr; }
   .transaction-review-fields { grid-template-columns: 1fr; }
   .transaction-review-fields > * { grid-column: 1 / -1; }
   .settings-page .page-title.compact { display: flex; align-items: flex-start; }
   .settings-grid p { font-size: 14px; }
+  .insights-preview-heading { align-items: start; }
+  .insights-preview-trend { grid-template-columns: minmax(160px, .72fr) minmax(200px, 1.28fr); }
 }
 
 @media (max-width: 520px) {
@@ -1179,6 +1200,11 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   .transaction-entry-method > button { min-height: 82px; }
   .transaction-ai-assistant { padding: 15px; }
   .transaction-list .empty-state { min-height: 210px; }
+  .insights-preview { padding: 20px; }
+  .insights-preview-heading { display: grid; gap: 8px; }
+  .insights-preview-heading p { text-align: left; }
+  .insights-preview-trend { min-height: 0; grid-template-columns: 1fr; gap: 18px; align-items: stretch; }
+  .insights-preview-bars { height: 100px; }
   .settings-page .page-title.compact { display: grid; gap: 15px; }
   .settings-save-note { justify-self: start; }
   .settings-grid { gap: 10px; }
