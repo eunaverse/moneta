@@ -140,10 +140,10 @@ jobs:
     environment:
       name: pr-preview
     steps:
-      - name: Check out trusted cleanup code from the base revision
+      - name: Check out trusted cleanup code from the current default branch
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
       - name: Set up Node.js

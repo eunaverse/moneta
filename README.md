@@ -41,11 +41,12 @@ approved internal PR can then upload a Cloudflare Worker version with the stable
 `pr-<number>` alias; it never runs `wrangler deploy` or changes production
 traffic. Fork PRs never receive repository secrets and never upload a preview.
 
-Preview deployment is intentionally disabled until a dedicated, empty/synthetic
-Supabase project and the Cloudflare Access decision are approved. The required
-repository gates are `PR_PREVIEW_ENABLED=true` and
-`PR_PREVIEW_ACCESS_REVIEWED=true`. Configuration, narrow Google OAuth redirects,
-secret handling, cost findings, and close cleanup are documented in
+Preview deployment uses a dedicated, empty/synthetic Supabase project. The
+required repository gates are `PR_PREVIEW_ENABLED=true` and
+`PR_PREVIEW_ACCESS_REVIEWED=true`. The current no-cost decision keeps the Worker
+preview public because activating Cloudflare Access required payment and overage
+authorization. Configuration, narrow Google OAuth redirects, secret handling,
+cost findings, exposure controls, and close cleanup are documented in
 [`docs/engineering/pr-preview-environments.md`](docs/engineering/pr-preview-environments.md).
 
 ## Included Shape

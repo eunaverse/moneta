@@ -16,7 +16,7 @@ Protect the path from an approved pull request through quality verification, iso
 ## Product journeys on the enabled preview
 
 - Open the preview at desktop and Pixel 7 viewports; confirm there is no fatal error, clipping, overlap, or horizontal overflow.
-- If Cloudflare Access is enabled, confirm an unapproved identity is blocked and an approved identity reaches Moneta.
+- Confirm the current public preview exposes only the login surface before authentication, and never enter real financial data. If Cloudflare Access is enabled later, confirm an unapproved identity is blocked and an approved identity reaches Moneta.
 - Continue with Google and confirm the browser returns to the same `pr-<number>` origin with a preview Supabase session.
 - Confirm the new preview account starts with empty balances, budgets, transactions, and receipts.
 - Create synthetic transactions and a synthetic receipt; confirm RLS-backed persistence and Realtime refresh.
@@ -26,7 +26,7 @@ Protect the path from an approved pull request through quality verification, iso
 
 ## Responsive and visual review
 
-The existing complete Playwright matrix remains the automated UI gate: Desktop Chrome and Pixel 7. Manually inspect the enabled preview's Access screen, Google return, empty state, populated transaction form, AI loading/result/error states, and receipt controls for hidden CTAs, awkward wrapping, or broken scrolling.
+The existing complete Playwright matrix remains the automated UI gate: Desktop Chrome and Pixel 7. Manually inspect the enabled preview's public login surface, Google return, empty state, populated transaction form, AI loading/result/error states, and receipt controls for hidden CTAs, awkward wrapping, or broken scrolling.
 
 ## Test buckets
 
@@ -35,7 +35,7 @@ The existing complete Playwright matrix remains the automated UI gate: Desktop C
 - `tests/e2e/ai-transaction-entry.spec.ts`: authorization/error/UI contracts for AI-assisted drafts.
 - `tests/e2e/navigation-responsive.spec.ts`: desktop/mobile navigation and overflow.
 - `tests/e2e/transactions.spec.ts`: synthetic transaction and receipt behavior.
-- Enabled preview manual pass: real Google OAuth return, Access policy, isolated Supabase persistence, and server-side OpenAI credential.
+- Enabled preview manual pass: real Google OAuth return, recorded public-access policy, isolated Supabase persistence, and server-side OpenAI credential.
 
 ## Release gate
 
@@ -43,4 +43,4 @@ The existing complete Playwright matrix remains the automated UI gate: Desktop C
 - `npm run verify` passes without skipping the live AI eval or any desktop/mobile Playwright project.
 - No production Supabase secret name appears in the preview job.
 - No provider credential value appears in `dist`, logs, command-line arguments, comments, or summaries.
-- External preview activation remains blocked until the Supabase project and Access decision are approved.
+- External preview activation uses the approved zero-cost public-access decision; Access remains off because its checkout required a payment method and overage authorization.

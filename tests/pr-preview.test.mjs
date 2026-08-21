@@ -58,7 +58,8 @@ test("preview URL publication and close cleanup are first-class workflow behavio
   assert.match(workflow, /publish/);
   assert.match(workflow, /github\.event\.action == 'closed'/);
   assert.match(workflow, /cleanup/);
-  assert.match(workflow, /github\.event\.pull_request\.base\.sha/);
+  assert.match(workflow, /github\.event\.repository\.default_branch/);
+  assert.doesNotMatch(workflow, /github\.event\.pull_request\.base\.sha/);
   assert.match(workflow, /PREVIEW_HEAD_SHA:\s*\$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
   assert.match(helper, /state:\s*"inactive"/);
 });
@@ -151,6 +152,11 @@ test("the runbook documents cost approval, narrow OAuth redirects, empty data, A
   assert.match(runbook, /synthetic|empty/i);
   assert.match(runbook, /Cloudflare Access/);
   assert.match(runbook, /preview_worker/);
+  assert.match(runbook, /payment method/i);
+  assert.match(runbook, /overage/i);
+  assert.match(runbook, /Access was not activated/i);
+  assert.match(runbook, /public preview/i);
+  assert.match(runbook, /PR_PREVIEW_ACCESS_REVIEWED=true/);
   assert.match(runbook, /PR.*closed/i);
   assert.match(readme, /PR preview/);
   assert.match(readme, /PR_PREVIEW_ENABLED/);

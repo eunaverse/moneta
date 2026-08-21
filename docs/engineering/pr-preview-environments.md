@@ -2,9 +2,18 @@
 
 ## Decision and activation boundary
 
-Moneta's PR preview automation is committed but intentionally disabled until an isolated Supabase resource and the preview access policy have explicit approval. Set both repository variables `PR_PREVIEW_ENABLED=true` and `PR_PREVIEW_ACCESS_REVIEWED=true` only after completing the checklist below. Until then, pull requests still run the full quality gate and the workflow explains why no external preview was created.
+Moneta's PR preview automation is enabled only after an isolated Supabase resource and the preview access policy have explicit approval. Set both repository variables `PR_PREVIEW_ENABLED=true` and `PR_PREVIEW_ACCESS_REVIEWED=true` only after completing the checklist below. `PR_PREVIEW_ACCESS_REVIEWED=true` means the exposure decision has been recorded; it does not by itself claim that Cloudflare Access is enabled.
 
 This boundary avoids silently creating a paid service, connecting a preview to production data, or publishing a private finance application before its access policy has been reviewed.
+
+### Approved no-cost configuration (2026-08-21)
+
+- The Supabase organization was verified on the Free plan with one free-project slot available. A second project dedicated to Moneta preview was created on Free/nano without a paid upgrade.
+- Only `001_moneta.sql` and `002_finance_state_realtime.sql` were applied. Before activation, `public.finance_states` and `storage.objects` both contained zero rows, all eight expected RLS policies were present, and `finance_states` was in the Realtime publication. No production dump, Auth user, receipt, or financial record was copied.
+- A separate no-billing Google Cloud project and OAuth web client were created for preview. Google accepts only the preview Supabase callback, and Supabase accepts only the stable PR alias pattern described below.
+- The Cloudflare Workers account is on Workers Free. The Zero Trust Free checkout required a payment method and explicit authorization for monthly overage charges. Because the approval condition is zero spend with no charge authorization, checkout was exited and Access was not activated.
+- The approved result is therefore a **public preview** on Workers Free. Anyone with the URL can reach the login surface. The mitigations are the dedicated empty/synthetic Supabase project, user-scoped RLS, private Storage, authenticated AI requests, fork exclusion, server-only provider credentials, narrow OAuth redirects, and PR-scoped version cleanup.
+- `PR_PREVIEW_ACCESS_REVIEWED=true` records this public-exposure review. No billing profile, paid plan, free trial, Supabase Branching, or production-data copy is authorized by this decision.
 
 ## Current repository audit
 
@@ -14,7 +23,7 @@ This boundary avoids silently creating a paid service, connecting a preview to p
 - There is no committed production dump, financial seed, `supabase/config.toml`, or Supabase management credential.
 - The repository state alone does not reveal the current Supabase organization plan or whether Branching is enabled. Confirm both in the Supabase dashboard before changing that account.
 
-## Official platform findings (verified 2026-08-20)
+## Official platform findings (verified 2026-08-21)
 
 ### Cloudflare
 
@@ -30,13 +39,13 @@ Branching is not a zero-cost toggle. Current [Branching usage documentation](htt
 
 ### GitHub
 
-GitHub does not pass Actions secrets to workflows triggered by a pull request from a fork. Moneta additionally checks `github.event.pull_request.head.repo.full_name == github.repository`, never uses `pull_request_target`, and checks out the trusted base revision for close cleanup. See GitHub's [secret restrictions](https://docs.github.com/en/code-security/reference/secret-security/secret-types).
+GitHub does not pass Actions secrets to workflows triggered by a pull request from a fork. Moneta additionally checks `github.event.pull_request.head.repo.full_name == github.repository`, never uses `pull_request_target`, and checks out the current trusted default branch for close cleanup. See GitHub's [secret restrictions](https://docs.github.com/en/code-security/reference/secret-security/secret-types).
 
 The remaining trust boundary is deliberate: code in an internal same-repository PR runs in a preview Worker that can use the AI secret at runtime. Only trusted collaborators may push internal branches. For stronger containment, place the `pr-preview` environment behind required reviewers and use a separate low-quota preview OpenAI credential; either change requires an explicit operational decision because it changes the automatic workflow or creates a new credential.
 
 ## Approved fallback: one dedicated preview Supabase project
 
-Use one non-production Supabase project shared by PR previews. It is isolated from production even though it is not isolated between PRs. Creating or reusing that external project still needs explicit approval.
+Use one non-production Supabase project shared by PR previews. It is isolated from production even though it is not isolated between PRs. This fallback received explicit no-cost approval on 2026-08-21.
 
 1. Create or identify a project whose sole purpose is Moneta preview testing.
 2. Apply only `supabase/migrations/001_moneta.sql` and `002_finance_state_realtime.sql`.
@@ -58,16 +67,19 @@ Use one non-production Supabase project shared by PR previews. It is isolated fr
    `https://pr-*-moneta.<workers-dev-subdomain>.workers.dev/**`
 
    The pattern fixes the Worker name, account subdomain, and `pr-` prefix. It is intentionally narrower than `https://**.workers.dev/**`. The application passes `window.location.origin` as `redirectTo`, and Supabase requires it to match the [redirect allow-list](https://supabase.com/docs/guides/auth/redirect-urls/).
-7. Create a GitHub environment named `pr-preview` with these secrets:
+7. Create a GitHub environment named `pr-preview` with these environment secrets:
+
+   - `PREVIEW_SUPABASE_URL`
+   - `PREVIEW_SUPABASE_ANON_KEY` — public by design; RLS remains mandatory
+
+   The preview job also reads these existing repository secrets:
 
    - `CLOUDFLARE_API_TOKEN` — least-privilege Workers Scripts write token
    - `CLOUDFLARE_ACCOUNT_ID`
-   - `PREVIEW_SUPABASE_URL`
-   - `PREVIEW_SUPABASE_ANON_KEY` — public by design; RLS remains mandatory
    - `MONETA_TRANSACTION_AI_TOKEN` — server-only
 
    Add environment variable `PR_PREVIEW_SUPABASE_PROJECT_REF` with the approved preview project ref. Add repository variable `PRODUCTION_SUPABASE_PROJECT_REF` with the public ref of the production project. The workflow rejects a URL whose hostname does not exactly match the preview ref and also rejects equal preview/production refs.
-8. Review Cloudflare Access before publishing previews. Recommended for this private finance UI: protect Worker `moneta` previews with a `preview_worker` application and allow only the Cloudflare account or explicitly approved email identities. If the preview must remain public, record that decision and its exposure before continuing.
+8. Review Cloudflare Access before publishing previews. Recommended for this private finance UI: protect Worker `moneta` previews with a `preview_worker` application and allow only the Cloudflare account or explicitly approved email identities. The current account required a payment method and overage authorization even for Zero Trust Free, so Access was not activated and the public-preview decision above was recorded instead.
 9. Set repository variables `PR_PREVIEW_ACCESS_REVIEWED=true` and then `PR_PREVIEW_ENABLED=true`.
 
 ## Runtime and secret flow
@@ -79,7 +91,7 @@ The upload uses `--preview-alias pr-<number>` and `--tag moneta-pr-<number>`. Wr
 ## Update and close cleanup
 
 - A new commit cancels an older run. After a successful upload, every older Worker version tagged for that PR is deleted while the new version remains the alias target.
-- When a PR is merged or closed, cleanup checks out code from `github.event.pull_request.base.sha`, lists Worker versions through the Cloudflare API, deletes only versions tagged `moneta-pr-<number>`, and marks the PR's GitHub Deployment inactive. No production deployment uses that tag.
+- When a PR is merged or closed, cleanup checks out trusted code from `github.event.repository.default_branch`, lists Worker versions through the Cloudflare API, deletes only versions tagged `moneta-pr-<number>`, and marks the PR's GitHub Deployment inactive. Using the current default branch also lets the infrastructure PR clean up its own preview after merge. No production deployment uses that tag.
 - Cloudflare does not document a separate Wrangler command for deleting a preview alias. Deleting every tagged target version removes the live preview target; verify the old alias is inactive after the first enabled close run.
 - The dedicated preview Supabase project is shared infrastructure, so closing one PR does not delete it. Keep it empty/synthetic and delete the project only through a separately approved decommissioning change.
 - If paid Supabase Branching is approved later, use the GitHub integration instead. Its ephemeral PR branch is data-less and is automatically deleted on merge/close; add a required Supabase Preview check before merging.
@@ -88,4 +100,4 @@ The upload uses `--preview-alias pr-<number>` and `--tag moneta-pr-<number>`. Wr
 
 Without Access, anyone who learns a preview URL can download the client bundle, reach the login page, and probe public HTTP endpoints. RLS and bearer-token verification still protect Supabase records and OpenAI inference, but they do not make the URL private. Public previews also expand the surface for dependency probing and denial-of-wallet attempts.
 
-Cloudflare Access is therefore recommended before activation. It adds an identity gate ahead of the Worker while Google OAuth still returns to the exact allow-listed preview origin. Recheck the full sign-in round trip, Supabase Realtime, receipt upload, and AI draft creation after Access is enabled.
+Cloudflare Access remains recommended if it can later be enabled without violating the no-charge policy. It adds an identity gate ahead of the Worker while Google OAuth still returns to the exact allow-listed preview origin. Until then, never use real financial data in a public preview, monitor Free-plan usage, and disable `PR_PREVIEW_ENABLED` immediately if probing or abuse appears. Recheck the full sign-in round trip, Supabase Realtime, receipt upload, and AI draft creation after any Access policy change.
