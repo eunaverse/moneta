@@ -12,7 +12,7 @@ This boundary avoids silently creating a paid service, connecting a preview to p
 - Only `001_moneta.sql` and `002_finance_state_realtime.sql` were applied. Before activation, `public.finance_states` and `storage.objects` both contained zero rows, all eight expected RLS policies were present, and `finance_states` was in the Realtime publication. No production dump, Auth user, receipt, or financial record was copied.
 - A separate no-billing Google Cloud project and OAuth web client were created for preview. Google accepts only the preview Supabase callback, and Supabase accepts only the stable PR Worker hostname pattern described below.
 - The Cloudflare Workers account is on Workers Free. The Zero Trust Free checkout required a payment method and explicit authorization for monthly overage charges. Because the approval condition is zero spend with no charge authorization, checkout was exited and Access was not activated.
-- The approved result is therefore a **public preview** on Workers Free. Anyone with the URL can reach the login surface. The mitigations are the dedicated empty/synthetic Supabase project, user-scoped RLS, private Storage, authenticated AI requests, fork exclusion, server-only provider credentials, narrow OAuth redirects, and PR-scoped Worker cleanup.
+- The approved result is therefore a **public preview** on Workers Free. Anyone with the URL can reach the login surface. The mitigations are the dedicated empty/synthetic Supabase project, user-scoped RLS, private Storage, authenticated AI requests, fork exclusion, server-only provider credentials, narrow OAuth redirects, required deployment approval, and owner-checked Worker cleanup.
 - `PR_PREVIEW_ACCESS_REVIEWED=true` records this public-exposure review. No billing profile, paid plan, free trial, Supabase Branching, or production-data copy is authorized by this decision.
 
 ## Current repository audit
@@ -27,7 +27,7 @@ This boundary avoids silently creating a paid service, connecting a preview to p
 
 ### Cloudflare
 
-[`wrangler deploy --name`](https://developers.cloudflare.com/workers/wrangler/commands/workers/#deploy) can target an independent Worker instead of the production `moneta` Worker. Moneta names each preview Worker `pr-<number>-moneta`, producing the stable URL `https://pr-<number>-moneta.<workers-dev-subdomain>.workers.dev`. Updating that PR deploys only to its own Worker, and Cloudflare's Worker delete operation removes the complete preview resource on close.
+[`wrangler deploy --name`](https://developers.cloudflare.com/workers/wrangler/commands/workers/#deploy) can target an independent Worker instead of the production `moneta` Worker. Moneta deploys approved PRs to one shared Worker named `review-moneta`, producing the fixed URL `https://review-moneta.<workers-dev-subdomain>.workers.dev`. The next approved PR replaces the active preview without changing production `moneta`.
 
 Workers.dev URLs are public when enabled. Wrangler supports declaring required secrets and supplying a secret file during [`deploy`](https://developers.cloudflare.com/workers/configuration/secrets/). If Cloudflare Access is approved later, protect the exact PR hostname pattern rather than changing access to the production Worker.
 
@@ -41,7 +41,7 @@ Branching is not a zero-cost toggle. Current [Branching usage documentation](htt
 
 GitHub does not pass Actions secrets to workflows triggered by a pull request from a fork. Moneta additionally checks `github.event.pull_request.head.repo.full_name == github.repository`, never uses `pull_request_target`, and checks out the current trusted default branch for close cleanup. See GitHub's [secret restrictions](https://docs.github.com/en/code-security/reference/secret-security/secret-types).
 
-The remaining trust boundary is deliberate: code in an internal same-repository PR runs in a preview Worker that can use the AI secret at runtime. Only trusted collaborators may push internal branches. For stronger containment, place the `pr-preview` environment behind required reviewers and use a separate low-quota preview OpenAI credential; either change requires an explicit operational decision because it changes the automatic workflow or creates a new credential.
+The remaining trust boundary is deliberate: code in an internal same-repository PR can run in a preview Worker that uses the AI secret at runtime, but only after a required reviewer approves the protected `pr-preview` environment. Only trusted collaborators may push internal branches. A separate low-quota preview OpenAI credential would provide stronger cost isolation, but creating one is a separate operational decision.
 
 ## Approved fallback: one dedicated preview Supabase project
 
@@ -64,9 +64,9 @@ Use one non-production Supabase project shared by PR previews. It is isolated fr
    The app uses Supabase's redirect-based OAuth flow; never put the Google client secret in GitHub, Cloudflare, or browser code. Supabase's [Google guide](https://supabase.com/docs/guides/auth/social-login/auth-google) identifies the project callback as Google's authorized redirect URI.
 6. In Supabase Authentication → URL Configuration, add this narrowly scoped additional Redirect URL:
 
-   `https://pr-*-moneta.<workers-dev-subdomain>.workers.dev/**`
+   `https://review-moneta.<workers-dev-subdomain>.workers.dev/**`
 
-   The pattern fixes the Worker name, account subdomain, and `pr-` prefix. It is intentionally narrower than `https://**.workers.dev/**`. The application passes `window.location.origin` as `redirectTo`, and Supabase requires it to match the [redirect allow-list](https://supabase.com/docs/guides/auth/redirect-urls/).
+   This exact Worker name and account subdomain are narrower than either a PR wildcard or `https://**.workers.dev/**`. The application passes `window.location.origin` as `redirectTo`, and Supabase requires it to match the [redirect allow-list](https://supabase.com/docs/guides/auth/redirect-urls/).
 7. Create a GitHub environment named `pr-preview` with these environment secrets:
 
    - `PREVIEW_SUPABASE_URL`
@@ -79,20 +79,22 @@ Use one non-production Supabase project shared by PR previews. It is isolated fr
    - `MONETA_TRANSACTION_AI_TOKEN` — server-only
 
    Add environment variable `PR_PREVIEW_SUPABASE_PROJECT_REF` with the approved preview project ref. Add repository variable `PRODUCTION_SUPABASE_PROJECT_REF` with the public ref of the production project. The workflow rejects a URL whose hostname does not exactly match the preview ref and also rejects equal preview/production refs.
-8. Review Cloudflare Access before publishing previews. Recommended for this private finance UI: protect the `pr-*-moneta.<workers-dev-subdomain>.workers.dev` preview host pattern and allow only the Cloudflare account or explicitly approved email identities. The current account required a payment method and overage authorization even for Zero Trust Free, so Access was not activated and the public-preview decision above was recorded instead.
-9. Set repository variables `PR_PREVIEW_ACCESS_REVIEWED=true` and then `PR_PREVIEW_ENABLED=true`.
+8. Configure the `pr-preview` GitHub environment with the repository owner as a required reviewer. After verification succeeds, open the waiting job's **Review deployments** dialog and select **Approve and deploy** only for a PR whose preview should replace the current one. Environment secrets are unavailable to the job before approval.
+9. Review Cloudflare Access before publishing previews. Recommended for this private finance UI: protect the `review-moneta.<workers-dev-subdomain>.workers.dev` preview host and allow only the Cloudflare account or explicitly approved email identities. The current account required a payment method and overage authorization even for Zero Trust Free, so Access was not activated and the public-preview decision above was recorded instead.
+10. Set repository variables `PR_PREVIEW_ACCESS_REVIEWED=true` and then `PR_PREVIEW_ENABLED=true`.
 
 ## Runtime and secret flow
 
-After `npm run verify` succeeds, the preview job rebuilds with only the dedicated preview project's public URL/key. It creates a mode-`0600` temporary JSON file containing `MONETA_TRANSACTION_AI_TOKEN`, calls `wrangler deploy --name pr-<number>-moneta --secrets-file`, and removes the temporary directory in a `finally` block. The secret is never passed as a command-line argument, printed, or assigned to a `VITE_` variable.
+After `npm run verify` succeeds, the preview job pauses at the protected `pr-preview` environment. Once the required reviewer selects **Approve and deploy**, it rebuilds with only the dedicated preview project's public URL/key. It creates a mode-`0600` temporary JSON file containing `MONETA_TRANSACTION_AI_TOKEN`, calls `wrangler deploy --name review-moneta --secrets-file`, and removes the temporary directory in a `finally` block. The secret is unavailable before approval and is never passed as a command-line argument, printed, or assigned to a `VITE_` variable.
 
-The deploy uses `--tag moneta-pr-<number>` for traceability. Wrangler's structured output must identify the exact PR-scoped Worker and its workers.dev URL before the workflow publishes either value to the GitHub Deployment environment, Job Summary, and sticky PR comment. It rejects output for the production `moneta` Worker.
+The deploy uses `--tag moneta-pr-<number>` for ownership and traceability. Wrangler's structured output must identify the exact shared preview Worker and its workers.dev URL before the workflow publishes either value to the GitHub Deployment environment, Job Summary, and sticky PR comment. It rejects output for the production `moneta` Worker. There is intentionally only **one active preview**: an approved deployment replaces the content at the fixed URL.
 
 ## Update and close cleanup
 
-- A new commit cancels an older run and redeploys the same `pr-<number>-moneta` Worker, so one PR cannot accumulate independently reachable preview versions.
-- When a PR is merged or closed, cleanup checks out trusted code from `github.event.repository.default_branch`, deletes only `/workers/scripts/pr-<number>-moneta`, and marks the PR's GitHub Deployment inactive. The deterministic name cannot resolve to the production `moneta` Worker. A missing preview Worker is treated as an idempotent successful cleanup.
-- Using the current default branch lets this infrastructure PR clean up its own PR-scoped Worker after merge. Verify the old URL returns inactive after the first enabled close run.
+- Preview deploy and cleanup jobs share the `moneta-shared-pr-preview` concurrency group, so they cannot race while replacing or deleting the fixed Worker.
+- A new commit cancels the older per-PR workflow before approval. Once approved, it deploys to the same `review-moneta` Worker, so PRs cannot accumulate independently reachable websites.
+- When a PR is merged or closed, cleanup checks out trusted code from `github.event.repository.default_branch` and reads `/workers/scripts/review-moneta/settings`. It deletes `/workers/scripts/review-moneta` only when the `workers/tag` annotation still equals that PR's `moneta-pr-<number>` tag. If another approved PR owns the Worker, cleanup leaves it untouched. A missing Worker is an idempotent success.
+- Cleanup does not use the protected environment or its Supabase secrets, so closing a PR does not require another approval.
 - The dedicated preview Supabase project is shared infrastructure, so closing one PR does not delete it. Keep it empty/synthetic and delete the project only through a separately approved decommissioning change.
 - If paid Supabase Branching is approved later, use the GitHub integration instead. Its ephemeral PR branch is data-less and is automatically deleted on merge/close; add a required Supabase Preview check before merging.
 

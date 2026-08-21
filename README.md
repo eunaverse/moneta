@@ -37,17 +37,19 @@ GitHub Actions secrets:
 ## PR preview
 
 Pull requests run the same complete quality gate before any preview action. An
-approved internal PR can then deploy a dedicated PR-scoped Worker named
-`pr-<number>-moneta`. That preserves the stable preview URL while keeping the
-production `moneta` Worker untouched. Closing the PR deletes the entire preview
-Worker. Fork PRs never receive repository secrets and never upload a preview.
+internal PR then waits for a required reviewer to select **Approve and deploy**.
+Approval deploys that PR to the single shared Worker `review-moneta`, so every
+approved PR uses the same website while the production `moneta` Worker remains
+untouched. A later approval replaces the active preview. Closing its owning PR
+deletes the shared Worker; closing any other PR leaves it unchanged. Fork PRs
+never receive repository secrets and never upload a preview.
 
 Preview deployment uses a dedicated, empty/synthetic Supabase project. The
 required repository gates are `PR_PREVIEW_ENABLED=true` and
 `PR_PREVIEW_ACCESS_REVIEWED=true`. The current no-cost decision keeps the Worker
 preview public because activating Cloudflare Access required payment and overage
 authorization. Configuration, narrow Google OAuth redirects, secret handling,
-cost findings, exposure controls, and close cleanup are documented in
+cost findings, manual approval, exposure controls, and close cleanup are documented in
 [`docs/engineering/pr-preview-environments.md`](docs/engineering/pr-preview-environments.md).
 
 ## Included Shape
