@@ -41,7 +41,9 @@ test("overview explains category-budget math without an outside-budget total", a
   const budgetCard = page.locator(".overview-budget-card");
   await expect(budgetCard).toContainText("Monthly category limits");
   await expect(budgetCard).toContainText("Spent from category limits");
-  await expect(budgetCard).toContainText("Other expenses stay visible in Transactions");
+  await expect(budgetCard).toContainText("This balance only includes expenses subtracted from category budgets");
+  await expect(budgetCard).toContainText("Other expenses still reduce your net worth");
+  await expect(budgetCard).not.toContainText("scheduled payments are reserved separately");
   await expect(budgetCard).not.toContainText("Budget spending");
   await expect(budgetCard).not.toContainText("Outside category budgets");
 });

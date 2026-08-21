@@ -11,6 +11,7 @@ export const features = [
   { id: "browser-history-navigation", journey: "Use browser back and forward to move between Moneta workspaces", spec: "tests/e2e/navigation-history.spec.ts" },
   { id: "select-control-layout", journey: "Use aligned touch-friendly select controls without overflow", spec: "tests/e2e/select-layout.spec.ts" },
   { id: "responsive-layout", journey: "Avoid overflow at supported viewports", spec: "tests/e2e/navigation-responsive.spec.ts" },
+  { id: "responsive-copy-system", journey: "Keep headings and explanatory copy on deliberate readable measures across supported viewports", spec: "tests/e2e/responsive-copy.spec.ts" },
   { id: "transaction-workspace-balance", journey: "Keep transaction entry readable beside actual activity and stack it before it becomes cramped", spec: "tests/e2e/workspace-layout.spec.ts" },
   { id: "settings-responsive-structure", journey: "Give structural settings enough width and prevent control collisions", spec: "tests/e2e/workspace-layout.spec.ts" },
   { id: "settings-change-clarity", journey: "Understand autosave and what a primary currency change affects", spec: "tests/e2e/product-usability.spec.ts" },

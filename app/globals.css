@@ -11,6 +11,9 @@
   --mint: #2fc99a;
   --coral: #f26b4f;
   --yellow: #f6c850;
+  --measure-page-copy: 62ch;
+  --measure-card-title: 30ch;
+  --measure-card-copy: 48ch;
 }
 
 * { box-sizing: border-box; }
@@ -44,7 +47,12 @@ button { cursor: pointer; }
 .page-title h1 { margin: 12px 0 0; font-size: clamp(42px, 5vw, 70px); line-height: 1.02; letter-spacing: -.055em; }
 .page-title h1 em { color: var(--purple); font-family: Georgia, serif; font-weight: 400; }
 .page-title.compact h1 { font-size: 48px; }
-.page-title p { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+.page-title p { max-inline-size: var(--measure-page-copy); margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+
+/* Keep headings and supporting copy on deliberate reading measures at every width. */
+.page-title h1, .setup-guide-intro h2, .card-heading h2, .insights-empty-copy > strong, .insights-preview-heading h2, .insights-preview-trend strong, .insights-preview-signals strong, .settings-grid h2 { text-wrap: balance; }
+.page-title p, .setup-guide-intro p, .forecast-copy, .clarity-note, .preview-empty span, .transaction-ai-heading p, .overview-plan-anchor p, .overview-budget-empty span, .budget-month-empty span, .category-budget-empty span, .settings-grid p, .insights-empty-copy > p, .insights-preview-heading p, .insights-preview-trend small, .insights-preview-signals small { overflow-wrap: break-word; text-wrap: pretty; }
+.setup-guide-intro p, .forecast-copy, .clarity-note, .preview-empty span, .transaction-ai-heading p, .overview-budget-empty span, .budget-month-empty span, .category-budget-empty span, .settings-grid p, .insights-empty-copy > p, .insights-preview-heading p, .insights-preview-trend small, .insights-preview-signals small { max-inline-size: var(--measure-card-copy); }
 .primary-action { padding: 13px 16px; border: 0; border-radius: 10px; background: var(--purple); color: #fff; font-size: 12px; font-weight: 750; box-shadow: 0 8px 20px #7057e833; }
 .primary-action b { margin-left: 15px; }
 
@@ -1149,13 +1157,13 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .insights-empty-state { grid-template-columns: minmax(260px, .75fr) minmax(0, 1.25fr); }
 .insights-empty-copy { padding: 24px; border: 1px dashed #ccc5dc; border-radius: 14px; background: #fff; }
 .insights-empty-copy > span { color: var(--purple); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
-.insights-empty-copy > strong { display: block; margin-top: 8px; font-size: 20px; line-height: 1.25; }
+.insights-empty-copy > strong { display: block; max-inline-size: var(--measure-card-title); margin-top: 8px; font-size: 20px; line-height: 1.25; }
 .insights-empty-copy > p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .insights-empty-copy > button { min-height: 44px; margin-top: 15px; padding: 10px 14px; border: 0; border-radius: 10px; background: var(--purple); color: #fff; font-size: 12px; font-weight: 850; }
 .insights-preview { margin-top: 20px; padding: 26px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
 .insights-preview-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
 .insights-preview-heading span, .insights-preview-trend span, .insights-preview-signals span { color: var(--purple); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
-.insights-preview-heading h2 { max-width: 650px; margin-top: 7px; font-size: 22px; line-height: 1.2; }
+.insights-preview-heading h2 { max-inline-size: var(--measure-card-title); margin-top: 7px; font-size: 22px; line-height: 1.2; }
 .insights-preview-heading p { max-width: 280px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; text-align: right; }
 .insights-preview-layout { min-width: 0; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(250px, .65fr); gap: 16px; margin-top: 20px; }
 .insights-preview-trend, .insights-preview-signals article { min-width: 0; padding: 20px; border: 1px solid #e1dde9; border-radius: 14px; background: #faf9fc; }
