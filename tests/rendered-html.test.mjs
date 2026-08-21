@@ -40,12 +40,13 @@ test("server-renders the Supabase setup or authentication gate", async () => {
 });
 
 test("supports separate budgets, planned payments, categories, and visual insights", async () => {
-  const [css, page, layout, authGate, repository, migration, realtimeMigration] = await Promise.all([
+  const [css, page, layout, authGate, repository, stateModel, migration, realtimeMigration] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/moneta-auth-gate.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/moneta-repository.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/moneta-state.ts", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/001_moneta.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/002_finance_state_realtime.sql", import.meta.url), "utf8"),
   ]);
@@ -188,7 +189,15 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /Unpaid scheduled payments through/);
   assert.doesNotMatch(page, /Simulation period/);
   assert.match(page, /view === "settings"/);
-  assert.match(page, /Export or import/);
+  assert.match(page, /Primary display currency/);
+  assert.match(page, /Download backup/);
+  assert.match(page, /Moneta never fetches or assumes a rate/);
+  assert.match(stateModel, /displayCurrency: "USD"/);
+  assert.match(stateModel, /assets: \[\]/);
+  assert.match(stateModel, /monthlyBudgets: \{\}/);
+  assert.match(stateModel, /toDisplayAmount/);
+  assert.doesNotMatch(page, /Export or import|importBackup|accept="application\/json/);
+  assert.doesNotMatch(page, /krwPrimary|krwSecondary|krwEmergency|usdCash|data\.exchangeRate\b/);
   assert.match(page, /Manage scheduled payments/);
   assert.match(page, /ADD PAYMENT/);
   assert.match(css, /button:focus-visible/);

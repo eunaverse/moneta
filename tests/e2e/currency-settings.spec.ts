@@ -1,0 +1,77 @@
+import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow, openApp, openPrimaryView } from "./helpers";
+
+test.beforeEach(async ({ page }) => openApp(page));
+
+test("new accounts use USD and no sample category budgets or import control", async ({ page }) => {
+  await openPrimaryView(page, "Budget");
+  await expect(page.getByLabel(/Expected monthly budgets: \$0/)).toBeVisible();
+  await expect(page.getByLabel("Housing expected monthly budget")).toHaveCount(0);
+
+  await openPrimaryView(page, "Settings");
+  await expect(page.getByLabel("Primary display currency")).toHaveValue("USD");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download backup" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^moneta-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  await expect(page.getByText(/Import/i)).toHaveCount(0);
+  await expect(page.locator('input[type="file"][accept*="json"]')).toHaveCount(0);
+});
+
+test("converts a foreign asset with a user-entered exchange rate", async ({ page }) => {
+  await page.getByRole("button", { name: "Edit assets" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("Korean savings");
+  await dialog.getByLabel("Asset 1 amount").fill("1400000");
+  await dialog.getByLabel("Asset 1 currency").selectOption("KRW");
+
+  await expect(dialog.getByText("Add a positive exchange rate for KRW")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Save balances" })).toBeDisabled();
+  await dialog.getByLabel("KRW per USD").fill("1400");
+  await expect(dialog.getByRole("button", { name: "Save balances" })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Save balances" }).click();
+
+  await expect(page.locator(".wealth-overview-heading").getByText("$1,000", { exact: true })).toBeVisible();
+  await page.getByText("Accounts & calculation").click();
+  await expect(page.getByText("Korean savings", { exact: true })).toBeVisible();
+  await expect(page.getByText(/1,400,000/)).toBeVisible();
+});
+
+test("uses configured foreign currencies for transactions and display totals", async ({ page }) => {
+  await page.getByRole("button", { name: "Edit assets" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("KRW wallet");
+  await dialog.getByLabel("Asset 1 currency").selectOption("KRW");
+  await dialog.getByLabel("KRW per USD").fill("1400");
+  await dialog.getByRole("button", { name: "Save balances" }).click();
+
+  await openPrimaryView(page, "Transactions");
+  const form = page.locator(".transaction-form");
+  await form.getByLabel("Description").fill("Transit pass");
+  await form.getByLabel("Amount").fill("140000");
+  await form.getByLabel("Currency").selectOption("KRW");
+  await form.getByRole("button", { name: /Save transaction/ }).click();
+
+  await expect(page.getByText("Transit pass", { exact: true })).toBeVisible();
+  await expect(page.locator(".transaction-summary").getByText("−$100", { exact: true }).first()).toBeVisible();
+  await expect(page.locator(".transaction-row").filter({ hasText: "Transit pass" })).toContainText("140,000");
+});
+
+test("allows an empty account to choose another primary currency", async ({ page }) => {
+  await openPrimaryView(page, "Settings");
+  await page.getByLabel("Primary display currency").selectOption("EUR");
+  await expect(page.getByText("€0 current net worth", { exact: true })).toBeVisible();
+});
+
+test("asset and rate controls remain usable at a medium viewport", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes("mobile"), "one medium-viewport pass is sufficient");
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.getByRole("button", { name: "Edit assets" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 currency").selectOption("JPY");
+  await expect(dialog.getByLabel("JPY per USD")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});

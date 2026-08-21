@@ -18,21 +18,22 @@ test("previews a what-if purchase and prepares a one-time payment", async ({ pag
 
 test("edits assets, the fixed plan period, and insights period", async ({ page }) => {
   await page.getByRole("button", { name: "Edit assets" }).click();
-  const dialog = page.getByRole("dialog", { name: "Edit assets & income" });
-  await dialog.getByLabel("USD cash").fill("10000");
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("Checking");
+  await dialog.getByLabel("Asset 1 amount").fill("10000");
   await dialog.getByRole("button", { name: "Save balances" }).click();
   await expect(page.getByText("$10,000", { exact: true }).first()).toBeVisible();
 
   await openPrimaryView(page, "Settings");
   await page.getByLabel("Planning end month").fill("2099-12");
   await expect(page.getByLabel("Planning end month")).toHaveValue("2099-12");
-  await page.getByLabel("KRW per USD").fill("1350");
   await openPrimaryView(page, "Insights");
   await page.locator(".insight-range-controls").getByRole("spinbutton").fill("12");
   await expect(page.getByText("12 MONTHS", { exact: true })).toBeVisible();
 });
 
-test("creates and renames a category and rejects an invalid backup", async ({ page }) => {
+test("creates and renames a category and exposes a download-only backup", async ({ page }) => {
   await openPrimaryView(page, "Settings");
   await page.getByRole("button", { name: /Manage/ }).click();
   await page.getByLabel("New category name").fill("Pets");
@@ -44,13 +45,6 @@ test("creates and renames a category and rejects an invalid backup", async ({ pa
   await expect(page.getByLabel("Rename Pet care")).toBeVisible();
 
   await page.getByRole("button", { name: /Settings/ }).first().click();
-  const invalidBackupAlert = page.waitForEvent("dialog");
-  await page.locator('input[type="file"][accept="application/json,.json"]').setInputFiles({
-    name: "invalid.json",
-    mimeType: "application/json",
-    buffer: Buffer.from('{"version": 99}'),
-  });
-  const alert = await invalidBackupAlert;
-  expect(alert.message()).toContain("valid Moneta backup");
-  await alert.accept();
+  await expect(page.getByRole("button", { name: "Download backup" })).toBeVisible();
+  await expect(page.locator('input[type="file"][accept*="json"]')).toHaveCount(0);
 });
