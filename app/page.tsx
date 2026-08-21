@@ -7,8 +7,8 @@ import { MonetaAuthGate, type MonetaAccount } from "../components/moneta-auth-ga
 import { addMonths, calculatePlanningCapacity, isDueInMonth, isPaidInMonth, monthIndex } from "../lib/budget-calculations";
 import { createReceiptUrls, loadMonetaState, MonetaStateConflictError, removeReceipt, saveMonetaState, subscribeMonetaState, uploadReceipt, type MonetaStateRecord } from "../lib/moneta-repository";
 import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, normalizeSnapshot, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
-import type { AssetBalance, BudgetState, CategorySort, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "../lib/moneta-types";
-import type { TransactionAiResult, TransactionAiReviewField } from "../lib/transaction-ai";
+import type { AssetBalance, BudgetState, CategorySort, LedgerAllocation, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "../lib/moneta-types";
+import type { TransactionAiAllocationReviewField, TransactionAiResult, TransactionAiReviewField } from "../lib/transaction-ai";
 
 type View = "overview" | "budget" | "fixed-costs" | "transactions" | "transaction-history" | "categories" | "what-if" | "insights" | "settings";
 type FixedCostFilter = "all" | "monthly" | "one-time";
@@ -19,6 +19,18 @@ type SyncStatus = "loading" | "migration" | "saving" | "saved" | "error";
 type TransactionAiStatus = "idle" | "loading" | "success" | "error";
 type Locale = "en" | "ko";
 type AssetEditorDraft = Pick<BudgetState, "assets" | "exchangeRates" | "monthlyIncome">;
+type TransactionDraft = {
+  date: string;
+  type: "expense" | "income";
+  category: string;
+  description: string;
+  amount: number;
+  currency: string;
+  countsTowardMonthlyBudget: boolean;
+  allocations: LedgerAllocation[];
+  linksPlannedPayment: boolean;
+  plannedPaymentKey: string;
+};
 
 const defaultExpenseCategories = DEFAULT_EXPENSE_CATEGORIES;
 const incomeCategories = ["Salary", "Bonus", "Investment", "Refund", "Other income"];
@@ -82,6 +94,11 @@ const readableMonth = (month: string, locale: Locale) => {
   return new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
 };
 const formatOriginalCurrency = (value: number, currency: string) => new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
+const entryAllocations = (entry: Pick<LedgerEntry, "type" | "category" | "description" | "amount" | "allocations">): LedgerAllocation[] => entry.type === "expense" && entry.allocations?.length
+  ? entry.allocations
+  : [{ category: entry.category, description: entry.description, amount: entry.amount }];
+const entryCategoryNames = (entry: Pick<LedgerEntry, "type" | "category" | "description" | "amount" | "allocations">) => Array.from(new Set(entryAllocations(entry).map((allocation) => allocation.category).filter(Boolean)));
+const primaryAllocationCategory = (allocations: LedgerAllocation[], fallback: string) => allocations.reduce((primary, allocation) => allocation.category && allocation.amount > primary.amount ? allocation : primary, { category: fallback, amount: -1 }).category;
 const chartColors = ["#7057e8", "#2fc99a", "#f26b4f", "#f6c850", "#4d9de0", "#b36ae2", "#63c174", "#ef8354", "#8d99ae", "#d45087"];
 const navigationItems: { view: View; label: string; icon: string }[] = [
   { view: "overview", label: "Overview", icon: "◫" },
@@ -213,11 +230,12 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const [newCategory, setNewCategory] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(localMonthKey);
   const [insightMonths, setInsightMonths] = useState(6);
-  const [draft, setDraft] = useState({ date: localDateKey(), type: "expense" as "expense" | "income", category: "Food", description: "", amount: 0, currency: "USD", countsTowardMonthlyBudget: true, linksPlannedPayment: false, plannedPaymentKey: "" });
+  const [draft, setDraft] = useState<TransactionDraft>({ date: localDateKey(), type: "expense", category: "Food", description: "", amount: 0, currency: "USD", countsTowardMonthlyBudget: true, allocations: [], linksPlannedPayment: false, plannedPaymentKey: "" });
   const [transactionAiDescription, setTransactionAiDescription] = useState("");
   const [transactionAiStatus, setTransactionAiStatus] = useState<TransactionAiStatus>("idle");
   const [transactionAiMessage, setTransactionAiMessage] = useState("");
   const [transactionAiReviewFields, setTransactionAiReviewFields] = useState<TransactionAiReviewField[]>([]);
+  const [transactionAiAllocationReviewFields, setTransactionAiAllocationReviewFields] = useState<TransactionAiAllocationReviewField[][]>([]);
   const [transactionEntryMode, setTransactionEntryMode] = useState<"ai" | "manual">("ai");
   const [recurringDraft, setRecurringDraft] = useState({ name: "Rent", category: "Housing", amount: 0, intervalMonths: 1, startMonth: localMonthKey(), endMonth: "" });
   const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null);
@@ -639,6 +657,9 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     setRateCurrencyDraft("");
   };
   const toDisplay = useCallback((entry: Pick<LedgerEntry, "amount" | "currency">) => toDisplayAmount(entry.amount, entry.currency, data.displayCurrency, data.exchangeRates) ?? 0, [data.displayCurrency, data.exchangeRates]);
+  const categoryAmountInDisplayCurrency = useCallback((entry: LedgerEntry, category: string) => entryAllocations(entry)
+    .filter((allocation) => allocation.category === category)
+    .reduce((sum, allocation) => sum + (toDisplayAmount(allocation.amount, entry.currency, data.displayCurrency, data.exchangeRates) ?? 0), 0), [data.displayCurrency, data.exchangeRates]);
   const currenciesInUse = Array.from(new Set([...data.assets.map((asset) => asset.currency), ...entries.map((entry) => entry.currency)]));
   const missingExchangeRateCurrencies = currenciesInUse.filter((currency) => currency !== data.displayCurrency && !(data.exchangeRates[currency] > 0));
   const draftNeedsExchangeRate = draft.currency !== data.displayCurrency && !(data.exchangeRates[draft.currency] > 0);
@@ -679,7 +700,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const scheduledThisMonthTotal = scheduledItems.reduce((sum, item) => sum + item.amount, 0);
   const monthlyFlexibleBudgetForSelectedMonth = monthlyBudgetTotal;
   const budgetAvailable = monthlyBudgetTotal - monthlyBudgetExpenseTotal;
-  const spentByCategory = Object.fromEntries(expenseCategories.map((category) => [category, monthEntries.filter((entry) => entry.type === "expense" && entry.countsTowardMonthlyBudget !== false && entry.category === category).reduce((sum, entry) => sum + toDisplay(entry), 0)])) as Record<string, number>;
+  const spentByCategory = Object.fromEntries(expenseCategories.map((category) => [category, monthEntries.filter((entry) => entry.type === "expense" && entry.countsTowardMonthlyBudget !== false).reduce((sum, entry) => sum + categoryAmountInDisplayCurrency(entry, category), 0)])) as Record<string, number>;
   const displayedBudgetCategories = [...activeBudgetCategories].sort((first, second) => {
     const originalOrder = activeBudgetCategories.indexOf(first) - activeBudgetCategories.indexOf(second);
     if (categorySort === "budget-desc") return (monthlyBudgets[second] || 0) - (monthlyBudgets[first] || 0) || originalOrder;
@@ -740,7 +761,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     { label: "Spent from category limits", value: `−${moneyDetailed.format(monthlyBudgetExpenseTotal)}`, tone: "subtract" },
     { label: budgetAvailable < 0 ? "Over budget" : "Left", value: moneyDetailed.format(Math.abs(budgetAvailable)), tone: "result" },
   ];
-  const monthlyCategoryStats = expenseCategories.map((category, index) => ({ category, amount: monthEntries.filter((entry) => entry.type === "expense" && entry.category === category).reduce((sum, entry) => sum + toDisplay(entry), 0), color: chartColors[index % chartColors.length] })).filter((item) => item.amount > 0).sort((first, second) => second.amount - first.amount);
+  const monthlyCategoryStats = expenseCategories.map((category, index) => ({ category, amount: monthEntries.filter((entry) => entry.type === "expense").reduce((sum, entry) => sum + categoryAmountInDisplayCurrency(entry, category), 0), color: chartColors[index % chartColors.length] })).filter((item) => item.amount > 0).sort((first, second) => second.amount - first.amount);
   let monthlyDonutCursor = 0;
   const monthlyDonutGradient = monthlyExpenseTotal > 0 ? `conic-gradient(${monthlyCategoryStats.map((item) => { const start = monthlyDonutCursor; monthlyDonutCursor += item.amount / monthlyExpenseTotal * 100; return `${item.color} ${start}% ${monthlyDonutCursor}%`; }).join(", ")})` : "conic-gradient(#e8e5ef 0 100%)";
   const insightPeriodMonths = Math.max(1, Math.min(24, insightMonths));
@@ -749,8 +770,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const insightExpenseEntries = insightEntries.filter((entry) => entry.type === "expense");
   const hasInsightSpending = insightExpenseEntries.length > 0;
   const insightExpenseTotal = insightExpenseEntries.reduce((sum, entry) => sum + toDisplay(entry), 0);
-  const insightSpentByCategory = Object.fromEntries(expenseCategories.map((category) => [category, insightExpenseEntries.filter((entry) => entry.category === category).reduce((sum, entry) => sum + toDisplay(entry), 0)])) as Record<string, number>;
-  const insightBudgetSpentByCategory = Object.fromEntries(expenseCategories.map((category) => [category, insightExpenseEntries.filter((entry) => entry.countsTowardMonthlyBudget !== false && entry.category === category).reduce((sum, entry) => sum + toDisplay(entry), 0)])) as Record<string, number>;
+  const insightSpentByCategory = Object.fromEntries(expenseCategories.map((category) => [category, insightExpenseEntries.reduce((sum, entry) => sum + categoryAmountInDisplayCurrency(entry, category), 0)])) as Record<string, number>;
+  const insightBudgetSpentByCategory = Object.fromEntries(expenseCategories.map((category) => [category, insightExpenseEntries.filter((entry) => entry.countsTowardMonthlyBudget !== false).reduce((sum, entry) => sum + categoryAmountInDisplayCurrency(entry, category), 0)])) as Record<string, number>;
   const categoryStats = expenseCategories.map((category, index) => ({ category, amount: insightSpentByCategory[category] || 0, color: chartColors[index % chartColors.length] })).filter((item) => item.amount > 0).sort((first, second) => second.amount - first.amount);
   const topCategory = categoryStats[0];
   const topCategoryPercent = topCategory && insightExpenseTotal > 0 ? topCategory.amount / insightExpenseTotal * 100 : 0;
@@ -783,7 +804,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const visibleFixedCosts = filteredFixedCosts.slice(0, fixedCostLimit);
   const transactionFilterCategories = Array.from(new Set([...expenseCategories, ...incomeCategories]));
   const filteredMonthEntries = monthEntries.filter((entry) => {
-    if (transactionCategoryFilter !== "all" && entry.category !== transactionCategoryFilter) return false;
+    if (transactionCategoryFilter !== "all" && !entryCategoryNames(entry).includes(transactionCategoryFilter)) return false;
     if (transactionTypeFilter !== "all" && entry.type !== transactionTypeFilter) return false;
     if (transactionBudgetFilter === "monthly" && (entry.type !== "expense" || entry.countsTowardMonthlyBudget === false)) return false;
     if (transactionBudgetFilter === "outside" && (entry.type !== "expense" || entry.countsTowardMonthlyBudget !== false)) return false;
@@ -791,8 +812,37 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   });
   const visibleMonthEntries = filteredMonthEntries.slice(0, transactionLimit);
   const recentEntries = [...entries].sort((first, second) => second.date.localeCompare(first.date));
+  const receiptAllocationTotal = draft.allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+  const receiptAllocationDifference = Math.round((draft.amount - receiptAllocationTotal) * 100) / 100;
+  const receiptAllocationTotalMatches = Math.abs(receiptAllocationDifference) <= 0.009;
+  const receiptAllocationRowsComplete = draft.allocations.every((allocation) => allocation.description.trim() && allocation.category && allocation.amount > 0);
+  const receiptAllocationReviewPending = transactionAiAllocationReviewFields.some((fields) => fields.length > 0);
+  const missingReceiptAllocationReview = draft.allocations.length === 0 && transactionAiReviewFields.includes("allocations");
+  const receiptAllocationsNeedAttention = missingReceiptAllocationReview || (draft.allocations.length > 0 && (!receiptAllocationRowsComplete || !receiptAllocationTotalMatches || receiptAllocationReviewPending));
+  const transactionReviewLabels = [
+    ...transactionAiReviewFields.filter((field) => field !== "allocations"),
+    ...(receiptAllocationsNeedAttention ? ["receipt items"] : []),
+  ];
   const clearTransactionAiReviewField = (field: TransactionAiReviewField) => {
     setTransactionAiReviewFields((current) => current.filter((item) => item !== field));
+  };
+  const updateReceiptAllocation = (index: number, field: TransactionAiAllocationReviewField, value: string | number) => {
+    setDraft((current) => {
+      const allocations = current.allocations.map((allocation, allocationIndex) => allocationIndex === index ? { ...allocation, [field]: value } : allocation);
+      return { ...current, allocations, category: primaryAllocationCategory(allocations, current.category) };
+    });
+    setTransactionAiAllocationReviewFields((current) => current.map((fields, allocationIndex) => allocationIndex === index ? fields.filter((item) => item !== field) : fields));
+  };
+  const addReceiptAllocation = () => {
+    setDraft((current) => ({ ...current, allocations: [...current.allocations, { category: "", description: "", amount: 0 }] }));
+    setTransactionAiAllocationReviewFields((current) => [...current, ["category", "description", "amount"]]);
+  };
+  const removeReceiptAllocation = (index: number) => {
+    setDraft((current) => {
+      const allocations = current.allocations.filter((_, allocationIndex) => allocationIndex !== index);
+      return { ...current, allocations, category: primaryAllocationCategory(allocations, current.category) };
+    });
+    setTransactionAiAllocationReviewFields((current) => current.filter((_, allocationIndex) => allocationIndex !== index));
   };
   const analyzeTransactionDraft = async () => {
     if (!transactionAiDescription.trim() && !receiptFile) return;
@@ -832,6 +882,11 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       const nextCategory = result.draft.category && allowedCategories.includes(result.draft.category)
         ? result.draft.category
         : allowedCategories[0];
+      const allocations = nextType === "expense" ? result.draft.allocations.map((allocation) => ({
+        category: allocation.category && expenseCategories.includes(allocation.category) ? allocation.category : "",
+        description: allocation.description || "",
+        amount: allocation.amount || 0,
+      })) : [];
       setDraft({
         date: result.draft.date || "",
         type: nextType,
@@ -840,11 +895,13 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
         amount: result.draft.amount || 0,
         currency: result.draft.currency || data.displayCurrency,
         countsTowardMonthlyBudget: result.draft.countsTowardMonthlyBudget ?? nextCategory !== "Tuition",
+        allocations,
         linksPlannedPayment: false,
         plannedPaymentKey: "",
       });
       if (result.draft.date) setSelectedMonth(result.draft.date.slice(0, 7));
       setTransactionAiReviewFields(result.needsReview);
+      setTransactionAiAllocationReviewFields(result.allocationNeedsReview || allocations.map(() => []));
       setTransactionAiStatus("success");
     } catch (error) {
       setTransactionAiStatus("error");
@@ -853,7 +910,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   };
   const addEntry = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!draft.description.trim() || draft.amount <= 0 || draftNeedsExchangeRate) return;
+    if (!draft.description.trim() || draft.amount <= 0 || draftNeedsExchangeRate || receiptAllocationsNeedAttention) return;
     const previousEntry = editingEntryId ? entries.find((entry) => entry.id === editingEntryId) : undefined;
     const previousEntries = entries;
     const previousSchedule = recurringExpenses;
@@ -869,6 +926,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       amount: draft.amount,
       currency: draft.currency,
       countsTowardMonthlyBudget: draft.type === "expense" ? draft.countsTowardMonthlyBudget : undefined,
+      allocations: draft.type === "expense" && draft.allocations.length > 0 ? draft.allocations.map((allocation) => ({ ...allocation, description: allocation.description.trim() })) : undefined,
       plannedExpenseId: draft.type === "expense" && draft.linksPlannedPayment && plannedExpenseId ? plannedExpenseId : undefined,
       plannedExpenseMonth: draft.type === "expense" && draft.linksPlannedPayment && plannedExpenseMonth ? plannedExpenseMonth : undefined,
       receiptId: draft.type === "expense" ? previousEntry?.receiptId : undefined,
@@ -891,11 +949,12 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     }
     setEntries((current) => previousEntry ? current.map((item) => item.id === previousEntry.id ? entry : item) : [entry, ...current]);
     setSelectedMonth(entry.date.slice(0, 7));
-    setDraft((current) => ({ ...current, description: "", amount: 0, linksPlannedPayment: false, plannedPaymentKey: "" }));
+    setDraft((current) => ({ ...current, description: "", amount: 0, allocations: [], linksPlannedPayment: false, plannedPaymentKey: "" }));
     setTransactionAiDescription("");
     setTransactionAiStatus("idle");
     setTransactionAiMessage("");
     setTransactionAiReviewFields([]);
+    setTransactionAiAllocationReviewFields([]);
     setTransactionEntryMode("ai");
     setEditingEntryId(null);
     setReceiptFile(null);
@@ -925,6 +984,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       amount: entry.amount,
       currency: entry.currency,
       countsTowardMonthlyBudget: entry.countsTowardMonthlyBudget !== false,
+      allocations: entry.allocations || [],
       linksPlannedPayment: Boolean(entry.plannedExpenseId && entry.plannedExpenseMonth),
       plannedPaymentKey: entry.plannedExpenseId && entry.plannedExpenseMonth ? `${entry.plannedExpenseId}::${entry.plannedExpenseMonth}` : "",
     });
@@ -934,6 +994,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     setTransactionAiStatus("idle");
     setTransactionAiMessage("");
     setTransactionAiReviewFields([]);
+    setTransactionAiAllocationReviewFields((entry.allocations || []).map(() => []));
     setSelectedMonth(entry.date.slice(0, 7));
     setSelectionScope(null);
     setSelectedItems([]);
@@ -942,13 +1003,14 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const cancelEntryEdit = () => {
     setEditingEntryId(null);
     setTransactionEntryMode("ai");
-    setDraft({ date: localDateKey(), type: "expense", category: expenseCategories[0], description: "", amount: 0, currency: data.displayCurrency, countsTowardMonthlyBudget: true, linksPlannedPayment: false, plannedPaymentKey: "" });
+    setDraft({ date: localDateKey(), type: "expense", category: expenseCategories[0], description: "", amount: 0, currency: data.displayCurrency, countsTowardMonthlyBudget: true, allocations: [], linksPlannedPayment: false, plannedPaymentKey: "" });
     setReceiptFile(null);
     setReceiptError("");
     setTransactionAiDescription("");
     setTransactionAiStatus("idle");
     setTransactionAiMessage("");
     setTransactionAiReviewFields([]);
+    setTransactionAiAllocationReviewFields([]);
     setReceiptInputKey((current) => current + 1);
   };
   const cancelSelection = () => {
@@ -971,7 +1033,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       return;
     }
     const scopeLabel = scope === "budgets" ? "selected budgets" : scope === "fixed-costs" ? "selected fixed costs" : scope === "transactions" ? "selected transactions" : "selected categories";
-    const categoryRecordsWillMove = scope === "categories" && (recurringExpenses.some((item) => selected.includes(item.category)) || entries.some((entry) => entry.type === "expense" && selected.includes(entry.category)));
+    const categoryRecordsWillMove = scope === "categories" && (recurringExpenses.some((item) => selected.includes(item.category)) || entries.some((entry) => entry.type === "expense" && entryCategoryNames(entry).some((category) => selected.includes(category))));
     if (!window.confirm(`Delete ${selected.length} ${scopeLabel}?${categoryRecordsWillMove ? " Existing records will move to a remaining category." : ""}`)) return;
     const snapshot = {
       entries,
@@ -1011,9 +1073,22 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
         return next;
       });
       setBudgetCategories((current) => current.filter((category) => !selected.includes(category)));
-      setEntries((current) => current.map((entry) => entry.type === "expense" && selected.includes(entry.category) ? { ...entry, category: replacement } : entry));
+      setEntries((current) => current.map((entry) => {
+        if (entry.type !== "expense") return entry;
+        const allocations = entry.allocations?.map((allocation) => selected.includes(allocation.category) ? { ...allocation, category: replacement } : allocation);
+        return {
+          ...entry,
+          category: selected.includes(entry.category) ? replacement : entry.category,
+          allocations,
+        };
+      }));
       setRecurringExpenses((current) => current.map((item) => selected.includes(item.category) ? { ...item, category: replacement } : item));
-      setDraft((current) => current.type === "expense" && selected.includes(current.category) ? { ...current, category: replacement, countsTowardMonthlyBudget: replacement !== "Tuition" } : current);
+      setDraft((current) => current.type === "expense" ? {
+        ...current,
+        category: selected.includes(current.category) ? replacement : current.category,
+        allocations: current.allocations.map((allocation) => selected.includes(allocation.category) ? { ...allocation, category: replacement } : allocation),
+        countsTowardMonthlyBudget: selected.includes(current.category) ? replacement !== "Tuition" : current.countsTowardMonthlyBudget,
+      } : current);
       setRecurringDraft((current) => selected.includes(current.category) ? { ...current, category: replacement } : current);
     }
     cancelSelection();
@@ -1024,7 +1099,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     if (!category || expenseCategories.includes(category)) return;
     setExpenseCategories((current) => [...current, category]);
     setMonthlyBudgets((current) => ({ ...current, [category]: 0 }));
-    setDraft((current) => current.type === "expense" ? { ...current, category, countsTowardMonthlyBudget: category !== "Tuition" } : current);
+    setDraft((current) => current.type === "expense" && current.allocations.length === 0 ? { ...current, category, countsTowardMonthlyBudget: category !== "Tuition" } : current);
     setRecurringDraft((current) => ({ ...current, category }));
     setNewCategory("");
   };
@@ -1043,10 +1118,18 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       delete next[category];
       return next;
     });
-    setEntries((current) => current.map((entry) => entry.category === category ? { ...entry, category: name } : entry));
+    setEntries((current) => current.map((entry) => ({
+      ...entry,
+      category: entry.category === category ? name : entry.category,
+      allocations: entry.allocations?.map((allocation) => allocation.category === category ? { ...allocation, category: name } : allocation),
+    })));
     setRecurringExpenses((current) => current.map((item) => item.category === category ? { ...item, category: name } : item));
     setBudgetCategories((current) => current.map((item) => item === category ? name : item));
-    setDraft((current) => current.category === category ? { ...current, category: name } : current);
+    setDraft((current) => ({
+      ...current,
+      category: current.category === category ? name : current.category,
+      allocations: current.allocations.map((allocation) => allocation.category === category ? { ...allocation, category: name } : allocation),
+    }));
     setRecurringDraft((current) => current.category === category ? { ...current, category: name } : current);
   };
   const moveCategory = (index: number, direction: -1 | 1) => {
@@ -1168,10 +1251,11 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   };
   const renderTransactionRow = (entry: LedgerEntry) => {
     const selecting = selectionScope === "transactions";
+    const categoryLabel = entryCategoryNames(entry).join(" · ");
     return <div className={`transaction-row ${selecting ? "selecting" : ""}`} key={entry.id}>
       {selecting && <label className="row-check"><input type="checkbox" checked={selectedItems.includes(entry.id)} onChange={() => toggleSelectedItem(entry.id)} /><span aria-hidden="true">✓</span><b className="sr-only">Select {entry.description}</b></label>}
-      <i className={entry.type}>{entry.category[0]}</i>
-      <div className="transaction-entry-copy"><strong title={entry.description}>{entry.description}</strong><span title={`${entry.date.slice(5).replace("-", "/")} · ${entry.category}`}>{entry.date.slice(5).replace("-", "/")} · {entry.category}{entry.receiptId ? " · Receipt" : ""}{entry.plannedExpenseMonth ? ` · Plan ${entry.plannedExpenseMonth} paid` : ""}</span>{entry.type === "expense" && <small className={entry.countsTowardMonthlyBudget !== false ? "budget-status included" : "budget-status excluded"}>{entry.countsTowardMonthlyBudget !== false ? "Monthly budget" : "Outside budget"}</small>}</div>
+      <i className={entry.type}>{categoryLabel[0]}</i>
+      <div className="transaction-entry-copy"><strong title={entry.description}>{entry.description}</strong><span title={`${entry.date.slice(5).replace("-", "/")} · ${categoryLabel}`}>{entry.date.slice(5).replace("-", "/")} · {categoryLabel}{entry.receiptId ? " · Receipt" : ""}{entry.plannedExpenseMonth ? ` · Plan ${entry.plannedExpenseMonth} paid` : ""}</span>{entry.type === "expense" && <small className={entry.countsTowardMonthlyBudget !== false ? "budget-status included" : "budget-status excluded"}>{entry.countsTowardMonthlyBudget !== false ? "Monthly budget" : "Outside budget"}</small>}</div>
       <b className={`transaction-amount ${entry.type}`}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b>
       {receiptUrls[entry.id] ? <button type="button" className="receipt-thumb" aria-label={`View receipt for ${entry.description}`} onClick={() => setActiveReceiptUrl(receiptUrls[entry.id])}><img src={receiptUrls[entry.id]} alt="" /></button> : <span className="receipt-placeholder" />}
       <div className="row-actions"><button type="button" className="row-edit" aria-label={`Edit ${entry.description}`} onClick={() => editEntry(entry)}>Edit</button></div>
@@ -1209,7 +1293,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       </>}
 
       <section className="workspace">
-        <header className="mobile-header"><button className="mobile-menu-button" type="button" aria-label="Open menu" aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={() => setMobileMenuOpen(true)}><i /><i /><i /></button><button className="logo" onClick={() => navigate("overview")}><span>M</span><strong>MONETA</strong></button><strong className="mobile-current-page">{currentNavigationItem ? navLabel(currentNavigationItem) : ""}</strong>{view !== "transactions" && view !== "transaction-history" && !mobileMenuOpen && !assetEditorOpen && !activeReceiptUrl && <button className="mobile-quick-add" type="button" aria-label="Add transaction" onClick={goToAddTransaction}><b>＋</b></button>}</header>
+        <header className="mobile-header"><button className="mobile-menu-button" type="button" aria-label="Open menu" aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={() => setMobileMenuOpen(true)}><i /><i /><i /></button><button className="logo" onClick={() => navigate("overview")}><span>M</span><strong>MONETA</strong></button><strong className="mobile-current-page">{currentNavigationItem ? navLabel(currentNavigationItem) : ""}</strong></header>
 
         {legacySnapshot && <article className="migration-banner"><div><span>DEVICE DATA FOUND</span><strong>Move this browser&apos;s Moneta data to your account?</strong><small>Transactions, budgets, schedules, and receipt photos will become available on your other devices. The local copy stays as a backup.</small></div><div><button type="button" className="migration-primary" disabled={syncStatus === "saving"} onClick={moveLegacyDataToAccount}>{syncStatus === "saving" ? "Moving…" : "Move to my account"}</button><button type="button" disabled={syncStatus === "saving"} onClick={startWithEmptyAccount}>Start clean</button></div></article>}
         {remoteConflict && <div className="sync-error sync-conflict" role="alert"><div><strong>Newer changes found</strong><span>Choose the cloud copy or keep the changes on this screen.</span></div><div className="sync-conflict-actions"><button type="button" onClick={useCloudVersion}>Use cloud</button><button type="button" className="conflict-keep" disabled={syncStatus === "saving"} onClick={() => void keepMyVersion()}>{syncStatus === "saving" ? "Saving…" : "Keep mine"}</button></div></div>}
@@ -1235,7 +1319,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
           <article className={`month-card overview-budget-card ${!hasCategoryBudgetData ? "empty" : ""}`}><div className="card-heading"><div><span>{selectedMonth}</span><h2>This month&apos;s category budgets</h2></div><button onClick={() => navigate("budget")}>{hasCategoryBudgetData ? "Edit budgets" : "Add budget"}</button></div>{!hasCategoryBudgetData ? <div className="overview-budget-empty"><strong>No category budget yet</strong><span>Add limits for categories such as Food or Transport when you are ready to track monthly spending.</span></div> : <><div className="budget-remaining"><span>CATEGORY BUDGET REMAINING</span><strong className={budgetAvailable < 0 ? "danger-text" : "success-text"}>{money.format(budgetAvailable)}</strong></div>{monthlyBudgetAbovePlanSafe > 0 && <p className="plan-budget-warning" role="status">Your category budget is {money.format(monthlyBudgetAbovePlanSafe)}/month above the safe monthly spend.</p>}<div className="stacked-track"><i className="actual" style={{ width: `${Math.min(100, monthlyFlexibleBudgetForSelectedMonth > 0 ? monthlyBudgetExpenseTotal / monthlyFlexibleBudgetForSelectedMonth * 100 : 0)}%` }} /></div><div className="budget-breakdown two"><div><i className="budget-dot" /><span>Monthly category limits</span><strong>{money.format(monthlyFlexibleBudgetForSelectedMonth)}</strong></div><div><i className="actual-dot" /><span>Spent from category limits</span><strong>{money.format(monthlyBudgetExpenseTotal)}</strong></div></div><p className="clarity-note">This balance only includes expenses subtracted from category budgets. Other expenses still reduce your net worth.</p></>}</article>
           <article className="overview-transaction-preview">
             <div className="card-heading"><div><span>RECENT ACTIVITY</span><h2>Transactions</h2></div>{entries.length > 0 && <button type="button" onClick={() => navigate("transaction-history")}>View all →</button>}</div>
-            {entries.length === 0 ? <div className="preview-empty"><strong>No transactions yet</strong><span>Add your first income or expense to make this overview useful.</span><button type="button" onClick={goToAddTransaction}>Add your first transaction</button></div> : recentEntries.slice(0, overviewTransactionLimit).map((entry) => <button type="button" className="overview-transaction-row" key={entry.id} onClick={() => { chooseMonth(entry.date.slice(0, 7)); navigate("transactions"); }}><i className={entry.type}>{entry.category[0]}</i><span><strong title={entry.description}>{entry.description}</strong><small title={`${entry.date} · ${entry.category}`}>{entry.date} · {entry.category}</small></span><b className={entry.type}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b></button>)}
+            {entries.length === 0 ? <div className="preview-empty"><strong>No transactions yet</strong><span>Add your first income or expense to make this overview useful.</span><button type="button" onClick={goToAddTransaction}>Add your first transaction</button></div> : recentEntries.slice(0, overviewTransactionLimit).map((entry) => { const categoryLabel = entryCategoryNames(entry).join(" · "); return <button type="button" className="overview-transaction-row" key={entry.id} onClick={() => { chooseMonth(entry.date.slice(0, 7)); navigate("transactions"); }}><i className={entry.type}>{categoryLabel[0]}</i><span><strong title={entry.description}>{entry.description}</strong><small title={`${entry.date} · ${categoryLabel}`}>{entry.date} · {categoryLabel}</small></span><b className={entry.type}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b></button>; })}
             <LoadMore shown={overviewTransactionLimit} total={recentEntries.length} step={3} onLoad={() => setOverviewTransactionLimit((current) => current + 3)} />
           </article>
         </div>}
@@ -1256,27 +1340,39 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
                 {receiptError && <p className="receipt-error">{receiptError}</p>}
                 <div className="transaction-ai-actions"><small>{locale === "ko" ? "OpenAI로 전송됩니다. 저장 전 모든 항목을 확인하세요." : "Sent to OpenAI for analysis. Verify every field before saving."}</small><button type="button" disabled={transactionAiStatus === "loading" || (!transactionAiDescription.trim() && !receiptFile)} onClick={() => void analyzeTransactionDraft()}>{transactionAiStatus === "loading" ? "Creating draft…" : "Create AI draft"} <b>→</b></button></div>
                 {transactionAiStatus === "loading" && <div className="transaction-ai-status loading" role="status">Reading the transaction evidence…</div>}
-                {transactionAiStatus === "success" && <div className={`transaction-ai-status success ${transactionAiReviewFields.length > 0 ? "review" : ""}`} role="status">{transactionAiReviewFields.length > 0 ? `AI draft ready. Check: ${transactionAiReviewFields.join(", ")} before saving.` : "AI draft ready. Review every field before saving."}</div>}
+                {transactionAiStatus === "success" && <div className={`transaction-ai-status success ${transactionReviewLabels.length > 0 ? "review" : ""}`} role="status">{transactionReviewLabels.length > 0 ? `AI draft ready. Check: ${transactionReviewLabels.join(", ")} before saving.` : "AI draft ready. Review every field before saving."}</div>}
                 {transactionAiStatus === "error" && <div className="transaction-ai-status error" role="alert">{transactionAiMessage || "AI analysis is temporarily unavailable. Try again."}</div>}
               </section>}
               {(editingEntryId || transactionEntryMode === "manual" || transactionAiStatus === "success") && <fieldset className="transaction-review-fields wide">
               <legend className="sr-only">Transaction details</legend>
               <div className="type-tabs">
-                <button type="button" className={draft.type === "expense" ? "active expense" : ""} onClick={() => { clearTransactionAiReviewField("type"); setDraft((current) => ({ ...current, type: "expense", category: expenseCategories[0], countsTowardMonthlyBudget: true, linksPlannedPayment: false, plannedPaymentKey: "" })); }}>Expense</button>
-                <button type="button" className={draft.type === "income" ? "active income" : ""} onClick={() => { clearTransactionAiReviewField("type"); clearTransactionAiReviewField("countsTowardMonthlyBudget"); setDraft((current) => ({ ...current, type: "income", category: incomeCategories[0], linksPlannedPayment: false, plannedPaymentKey: "" })); setReceiptFile(null); setReceiptInputKey((current) => current + 1); }}>Income</button>
+                <button type="button" className={draft.type === "expense" ? "active expense" : ""} onClick={() => { clearTransactionAiReviewField("type"); setDraft((current) => ({ ...current, type: "expense", category: primaryAllocationCategory(current.allocations, expenseCategories[0]), countsTowardMonthlyBudget: true, linksPlannedPayment: false, plannedPaymentKey: "" })); }}>Expense</button>
+                <button type="button" className={draft.type === "income" ? "active income" : ""} onClick={() => { clearTransactionAiReviewField("type"); clearTransactionAiReviewField("countsTowardMonthlyBudget"); clearTransactionAiReviewField("allocations"); setTransactionAiAllocationReviewFields([]); setDraft((current) => ({ ...current, type: "income", category: incomeCategories[0], allocations: [], linksPlannedPayment: false, plannedPaymentKey: "" })); setReceiptFile(null); setReceiptInputKey((current) => current + 1); }}>Income</button>
               </div>
               <label><span>Date</span><input type="date" required value={draft.date} onChange={(event) => { clearTransactionAiReviewField("date"); setDraft((current) => ({ ...current, date: event.target.value })); }} /></label>
-              <label><span>Category</span><select value={draft.category} onChange={(event) => { clearTransactionAiReviewField("category"); const category = event.target.value; setDraft((current) => ({ ...current, category, countsTowardMonthlyBudget: current.type === "expense" ? category !== "Tuition" : current.countsTowardMonthlyBudget })); }}>{(draft.type === "expense" ? expenseCategories : incomeCategories).map((category) => <option key={category}>{category}</option>)}</select></label>
+              {draft.allocations.length === 0 && <label><span>Category</span><select value={draft.category} onChange={(event) => { clearTransactionAiReviewField("category"); const category = event.target.value; setDraft((current) => ({ ...current, category, countsTowardMonthlyBudget: current.type === "expense" ? category !== "Tuition" : current.countsTowardMonthlyBudget })); }}>{(draft.type === "expense" ? expenseCategories : incomeCategories).map((category) => <option key={category}>{category}</option>)}</select></label>}
               <label className="wide"><span>Description</span><input required placeholder="e.g. Grocery run" value={draft.description} onChange={(event) => { clearTransactionAiReviewField("description"); setDraft((current) => ({ ...current, description: event.target.value })); }} /></label>
               <label><span>Amount</span><input type="text" inputMode="decimal" required value={formatEditableMoney(draft.amount)} placeholder="0" onChange={(event) => { clearTransactionAiReviewField("amount"); setDraft((current) => ({ ...current, amount: parseEditableMoney(event.target.value) })); }} /></label>
               <label><span>Currency</span><select value={draft.currency} onChange={(event) => { clearTransactionAiReviewField("currency"); setDraft((current) => ({ ...current, currency: event.target.value })); }}>{currencyCodes.map((currency) => <option key={currency} value={currency}>{currencyLabel(currency)}</option>)}</select></label>
+              {draft.type === "expense" && missingReceiptAllocationReview && <section className="receipt-allocation-empty wide" aria-label="Receipt items need review"><div><span>RECEIPT ITEMS NEED REVIEW</span><strong>AI could not produce a complete category split</strong><small>Add the readable items yourself, or keep this as one category when the receipt is not itemized.</small></div><div><button type="button" onClick={addReceiptAllocation}>Add receipt items</button><button type="button" className="secondary" onClick={() => clearTransactionAiReviewField("allocations")}>Use one category</button></div></section>}
+              {draft.type === "expense" && draft.allocations.length > 0 && <fieldset className="receipt-allocation-editor wide" aria-label="Receipt category split">
+                <legend className="sr-only">Receipt category split</legend>
+                <div className="receipt-allocation-heading"><div><span>RECEIPT CATEGORY SPLIT</span><strong>{draft.allocations.length} {draft.allocations.length === 1 ? "item" : "items"} across {entryCategoryNames({ ...draft, type: "expense" }).length} {entryCategoryNames({ ...draft, type: "expense" }).length === 1 ? "category" : "categories"}</strong><small>Review what AI read. Each item updates its category totals without creating another transaction.</small></div><button type="button" onClick={addReceiptAllocation}>Add item</button></div>
+                <div className="receipt-allocation-list">{draft.allocations.map((allocation, index) => <article className="receipt-allocation-row" key={index}>
+                  <label><span>ITEM</span><input aria-label={`Receipt item ${index + 1} description`} value={allocation.description} onChange={(event) => updateReceiptAllocation(index, "description", event.target.value)} /></label>
+                  <label><span>CATEGORY</span><select aria-label={`Receipt item ${index + 1} category`} value={allocation.category} onChange={(event) => updateReceiptAllocation(index, "category", event.target.value)}><option value="">Choose category</option>{expenseCategories.map((category) => <option key={category}>{category}</option>)}</select></label>
+                  <label><span>AMOUNT</span><input aria-label={`Receipt item ${index + 1} amount`} type="text" inputMode="decimal" value={formatEditableMoney(allocation.amount)} placeholder="0" onChange={(event) => updateReceiptAllocation(index, "amount", parseEditableMoney(event.target.value))} /></label>
+                  <button type="button" aria-label={`Remove receipt item ${index + 1}`} onClick={() => removeReceiptAllocation(index)}>×</button>
+                </article>)}</div>
+                <div className={`receipt-allocation-balance ${receiptAllocationsNeedAttention ? "warning" : "matched"}`} role="status"><span>{receiptAllocationTotalMatches ? `Split total ${formatOriginalCurrency(receiptAllocationTotal, draft.currency)} matches receipt total ${formatOriginalCurrency(draft.amount, draft.currency)}` : receiptAllocationDifference > 0 ? `${formatOriginalCurrency(receiptAllocationDifference, draft.currency)} unassigned` : `${formatOriginalCurrency(Math.abs(receiptAllocationDifference), draft.currency)} over receipt total`}</span><strong>{formatOriginalCurrency(receiptAllocationTotal, draft.currency)} / {formatOriginalCurrency(draft.amount, draft.currency)}</strong></div>
+              </fieldset>}
               {draftNeedsExchangeRate && <p className="receipt-error wide" role="alert">Add a positive {draft.currency} per {data.displayCurrency} exchange rate in Settings or Assets before saving.</p>}
               {draft.type === "expense" && <label className="budget-impact wide"><input type="checkbox" aria-label="Count toward monthly budget" checked={draft.countsTowardMonthlyBudget} onChange={(event) => { clearTransactionAiReviewField("countsTowardMonthlyBudget"); setDraft((current) => ({ ...current, countsTowardMonthlyBudget: event.target.checked, linksPlannedPayment: event.target.checked ? false : current.linksPlannedPayment, plannedPaymentKey: event.target.checked ? "" : current.plannedPaymentKey })); }} /><span aria-hidden="true"><i /></span><div><strong>Subtract from this month&apos;s category budgets?</strong><small>{draft.countsTowardMonthlyBudget ? "Yes · counts against this month's category limits" : "No · does not reduce category limits"}</small></div></label>}
-              {draft.type === "expense" && selectablePlannedOccurrences.length > 0 && <label className="budget-impact scheduled-cost-toggle wide"><input type="checkbox" aria-label="Link to a scheduled cost" checked={draft.linksPlannedPayment} onChange={(event) => setDraft((current) => ({ ...current, linksPlannedPayment: event.target.checked, countsTowardMonthlyBudget: event.target.checked ? false : current.countsTowardMonthlyBudget, plannedPaymentKey: event.target.checked ? current.plannedPaymentKey : "" }))} /><span aria-hidden="true"><i /></span><div><strong>Match a scheduled payment?</strong><small>{draft.linksPlannedPayment ? "Yes · prevents reserving it twice" : "No · record as additional spending"}</small></div></label>}
+              {draft.type === "expense" && draft.allocations.length === 0 && selectablePlannedOccurrences.length > 0 && <label className="budget-impact scheduled-cost-toggle wide"><input type="checkbox" aria-label="Link to a scheduled cost" checked={draft.linksPlannedPayment} onChange={(event) => setDraft((current) => ({ ...current, linksPlannedPayment: event.target.checked, countsTowardMonthlyBudget: event.target.checked ? false : current.countsTowardMonthlyBudget, plannedPaymentKey: event.target.checked ? current.plannedPaymentKey : "" }))} /><span aria-hidden="true"><i /></span><div><strong>Match a scheduled payment?</strong><small>{draft.linksPlannedPayment ? "Yes · prevents reserving it twice" : "No · record as additional spending"}</small></div></label>}
               {draft.type === "expense" && draft.linksPlannedPayment && <label className="wide"><span>Scheduled payment</span><select required value={draft.plannedPaymentKey} onChange={(event) => { const occurrence = selectablePlannedOccurrences.find((item) => item.key === event.target.value); setDraft((current) => ({ ...current, plannedPaymentKey: event.target.value, countsTowardMonthlyBudget: false, ...(occurrence ? { category: occurrence.category, description: current.description || occurrence.name, amount: current.amount || occurrence.amount } : {}) })); }}><option value="">Select a scheduled payment</option>{selectablePlannedOccurrences.map((item) => <option key={item.key} value={item.key}>{item.month} · {item.name} · {money.format(item.amount)}</option>)}</select></label>}
               {editingEntryId && draft.type === "expense" && <label className="receipt-upload wide"><span>Receipt photo · optional</span><input key={receiptInputKey} type="file" accept="image/*" onChange={(event) => chooseReceipt(event.target.files?.[0])} /><div><i>▣</i><strong>{receiptFile ? receiptFile.name : "Take a photo or choose an image"}</strong><small>JPG, PNG, HEIC or another image · max 10 MB</small></div></label>}
               {editingEntryId && receiptError && <p className="receipt-error wide">{receiptError}</p>}
-              <div className="form-actions transaction-form-actions"><button className="submit-button" type="submit" disabled={draftNeedsExchangeRate || transactionAiStatus === "loading" || transactionAiReviewFields.length > 0}>{editingEntryId ? "Save changes" : "Save transaction"} <b>{editingEntryId ? "✓" : "＋"}</b></button>{editingEntryId && <button className="cancel-button" type="button" onClick={cancelEntryEdit}>Cancel</button>}</div>
+              <div className="form-actions transaction-form-actions"><button className="submit-button" type="submit" disabled={draftNeedsExchangeRate || transactionAiStatus === "loading" || transactionReviewLabels.length > 0 || receiptAllocationsNeedAttention}>{editingEntryId ? "Save changes" : "Save transaction"} <b>{editingEntryId ? "✓" : "＋"}</b></button>{editingEntryId && <button className="cancel-button" type="button" onClick={cancelEntryEdit}>Cancel</button>}</div>
               </fieldset>}
             </form>
             <article className="transaction-list">

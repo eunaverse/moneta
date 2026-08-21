@@ -68,8 +68,10 @@ test("accepts a description or supported image and returns a normalized review d
       amount: 42.18,
       currency: "USD",
       countsTowardMonthlyBudget: true,
+      allocations: [],
     },
     needsReview: [],
+    allocationNeedsReview: [],
   });
 });
 
@@ -96,6 +98,50 @@ test("accepts only currencies supplied by the current Moneta workspace", () => {
   assert.equal(unsupported.needsReview.includes("currency"), true);
 });
 
+test("preserves itemized receipt allocations when their categories and total are grounded", () => {
+  const result = normalizeTransactionAiDraft({
+    date: "2026-08-19",
+    type: "expense",
+    category: "Food",
+    description: "Target",
+    amount: 30,
+    currency: "USD",
+    countsTowardMonthlyBudget: true,
+    allocations: [
+      { description: "Milk", category: "Food", amount: 5, uncertainFields: [] },
+      { description: "Storage bin", category: "Shopping", amount: 25, uncertainFields: [] },
+    ],
+    uncertainFields: [],
+  }, categories);
+
+  assert.deepEqual(result.draft.allocations, [
+    { description: "Milk", category: "Food", amount: 5 },
+    { description: "Storage bin", category: "Shopping", amount: 25 },
+  ]);
+  assert.equal(result.draft.category, "Shopping");
+  assert.deepEqual(result.allocationNeedsReview, [[], []]);
+  assert.equal(result.needsReview.includes("allocations"), false);
+});
+
+test("blocks an itemized receipt split when line items do not reconcile to the receipt total", () => {
+  const result = normalizeTransactionAiDraft({
+    date: "2026-08-19",
+    type: "expense",
+    category: "Food",
+    description: "Target",
+    amount: 30,
+    currency: "USD",
+    countsTowardMonthlyBudget: true,
+    allocations: [
+      { description: "Milk", category: "Food", amount: 5, uncertainFields: [] },
+      { description: "Storage bin", category: "Shopping", amount: 20, uncertainFields: [] },
+    ],
+    uncertainFields: [],
+  }, categories);
+
+  assert.equal(result.needsReview.includes("allocations"), true);
+});
+
 test("does not trust invalid model fields and identifies everything the user must supply", () => {
   const result = normalizeTransactionAiDraft({
     date: "not-a-date",
@@ -116,6 +162,7 @@ test("does not trust invalid model fields and identifies everything the user mus
     amount: null,
     currency: null,
     countsTowardMonthlyBudget: null,
+    allocations: [],
   });
   assert.deepEqual(result.needsReview, ["date", "category", "description", "amount", "currency", "countsTowardMonthlyBudget"]);
 });

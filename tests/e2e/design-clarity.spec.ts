@@ -38,22 +38,19 @@ test("language choice honestly discloses partial Korean coverage", async ({ page
   await expect(page.getByRole("button", { name: /한국어.*부분 지원/ })).toBeVisible();
 });
 
-test("mobile quick add lives in the header and never overlays navigation or dialogs", async ({ page }, testInfo) => {
+test("mobile header avoids a redundant global transaction action", async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.includes("mobile"), "mobile-only interaction");
 
-  const quickAdd = page.getByRole("button", { name: "Add transaction" });
-  await expect(page.locator(".mobile-header").getByRole("button", { name: "Add transaction" })).toBeVisible();
+  await expect(page.locator(".mobile-header").getByRole("button", { name: "Add transaction" })).toHaveCount(0);
   await expect(page.locator(".mobile-transaction-fab")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Open menu" }).click();
   await expect(page.getByRole("dialog", { name: "Main navigation" })).toBeVisible();
-  await expect(quickAdd).toBeHidden();
   await page.getByRole("button", { name: "Close menu" }).click();
 
   await page.getByRole("button", { name: "Edit assets" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
   await expect(dialog).toBeVisible();
-  await expect(quickAdd).toBeHidden();
   await expect(dialog.getByRole("button", { name: "Save balances" })).toBeVisible();
 });
 

@@ -10,8 +10,10 @@ const completeDraft = {
     amount: 42.18,
     currency: "USD",
     countsTowardMonthlyBudget: true,
+    allocations: [],
   },
   needsReview: [],
+  allocationNeedsReview: [],
 };
 
 test.beforeEach(async ({ page }) => {
@@ -69,6 +71,100 @@ test("sends a selected card screenshot for AI analysis and keeps it attached to 
   await expect(form.getByLabel("Amount")).toHaveValue("63.27");
   await expect(form.getByText("card-payment.png")).toBeVisible();
   expect(sentScreenshot).toBe(true);
+});
+
+test("keeps one mixed receipt transaction while reviewing item-level category allocations", async ({ page }) => {
+  await page.route("**/api/transactions/parse", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      draft: {
+        ...completeDraft.draft,
+        description: "Target",
+        amount: 30,
+        allocations: [
+          { description: "Milk", category: "Food", amount: 5 },
+          { description: "Storage bin", category: "Shopping", amount: 25 },
+        ],
+      },
+      needsReview: [],
+      allocationNeedsReview: [[], []],
+    }) });
+  });
+
+  const form = page.locator(".transaction-form");
+  await form.locator('input[type="file"][accept="image/*"]').setInputFiles({
+    name: "mixed-receipt.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"),
+  });
+  await form.getByRole("button", { name: "Create AI draft" }).click();
+
+  const split = form.getByRole("group", { name: "Receipt category split" });
+  await expect(split).toContainText("2 items across 2 categories");
+  await expect(split.getByLabel("Receipt item 1 description")).toHaveValue("Milk");
+  await expect(split.getByLabel("Receipt item 1 category")).toHaveValue("Food");
+  await expect(split.getByLabel("Receipt item 2 description")).toHaveValue("Storage bin");
+  await expect(split.getByLabel("Receipt item 2 category")).toHaveValue("Shopping");
+  await expect(split).toContainText("Split total $30.00 matches receipt total $30.00");
+
+  await form.getByRole("button", { name: "Save transaction" }).click();
+  const row = page.locator(".transaction-list .transaction-row").filter({ hasText: "Target" });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("Food · Shopping");
+  await page.getByRole("button", { name: /View all/ }).click();
+  await expect(page.locator(".transaction-category-bars")).toContainText("Food");
+  await expect(page.locator(".transaction-category-bars")).toContainText("Shopping");
+});
+
+test("blocks saving an itemized receipt until its split matches the receipt total", async ({ page }) => {
+  await page.route("**/api/transactions/parse", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      draft: {
+        ...completeDraft.draft,
+        description: "Target",
+        amount: 30,
+        allocations: [
+          { description: "Milk", category: "Food", amount: 5 },
+          { description: "Storage bin", category: "Shopping", amount: 20 },
+        ],
+      },
+      needsReview: ["allocations"],
+      allocationNeedsReview: [[], []],
+    }),
+  }));
+
+  const form = page.locator(".transaction-form");
+  await form.getByLabel("Describe this transaction").fill("Itemized Target receipt");
+  await form.getByRole("button", { name: "Create AI draft" }).click();
+
+  const split = form.getByRole("group", { name: "Receipt category split" });
+  await expect(split).toContainText("$5.00 unassigned");
+  await expect(form.getByRole("button", { name: "Save transaction" })).toBeDisabled();
+  await split.getByLabel("Receipt item 2 amount").fill("25");
+  await expect(split).toContainText("Split total $30.00 matches receipt total $30.00");
+  await expect(form.getByRole("button", { name: "Save transaction" })).toBeEnabled();
+});
+
+test("requires an explicit fallback when AI cannot recover receipt items", async ({ page }) => {
+  await page.route("**/api/transactions/parse", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      draft: { ...completeDraft.draft, description: "Faded receipt", amount: 30 },
+      needsReview: ["allocations"],
+      allocationNeedsReview: [],
+    }),
+  }));
+
+  const form = page.locator(".transaction-form");
+  await form.getByLabel("Describe this transaction").fill("A faded receipt with unreadable items");
+  await form.getByRole("button", { name: "Create AI draft" }).click();
+
+  await expect(form.getByRole("region", { name: "Receipt items need review" })).toBeVisible();
+  await expect(form.getByRole("button", { name: "Save transaction" })).toBeDisabled();
+  await form.getByRole("button", { name: "Use one category" }).click();
+  await expect(form.getByRole("button", { name: "Save transaction" })).toBeEnabled();
 });
 
 test("keeps incomplete AI output out of the ledger and names the fields to review", async ({ page }) => {

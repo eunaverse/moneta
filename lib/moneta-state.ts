@@ -1,5 +1,5 @@
 import { addMonths, monthIndex } from "./budget-calculations.ts";
-import type { AssetBalance, BudgetState, CategorySort, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "./moneta-types";
+import type { AssetBalance, BudgetState, CategorySort, LedgerAllocation, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "./moneta-types";
 
 export const DEFAULT_EXPENSE_CATEGORIES = ["Housing", "Food", "Transport", "Insurance & Health", "Tuition", "Shopping", "Travel", "Other"];
 
@@ -83,6 +83,22 @@ const isUntouchedLegacySample = (budgets: MonthlyBudgets, budgetCategories: stri
     && budgetCategories.every((category, index) => category === LEGACY_SAMPLE_BUDGET_CATEGORIES[index]);
 };
 
+const sanitizeAllocations = (value: unknown, entryAmount: unknown): LedgerAllocation[] | undefined => {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 40) return undefined;
+  const allocations = value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const candidate = item as Partial<LedgerAllocation>;
+    const category = migrateCategory(String(candidate.category || "").trim());
+    const description = String(candidate.description || "").replace(/\s+/g, " ").trim().slice(0, 140);
+    const amount = finiteNonNegative(candidate.amount);
+    return category && description && amount > 0 ? { category, description, amount } : null;
+  });
+  if (allocations.some((allocation) => allocation === null)) return undefined;
+  const validAllocations = allocations as LedgerAllocation[];
+  const allocationTotal = validAllocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+  return Math.abs(allocationTotal - finiteNonNegative(entryAmount)) <= 0.009 ? validAllocations : undefined;
+};
+
 export function createDefaultSnapshot(currentMonth = localMonthKey()): MonetaSnapshot {
   return {
     version: 2,
@@ -114,11 +130,15 @@ export function normalizeSnapshot(snapshot: StoredMonetaSnapshot, currentMonth =
   const planningEndMonth = storedPlanningEndMonth && monthIndex(storedPlanningEndMonth) >= monthIndex(planningStartMonth)
     ? storedPlanningEndMonth
     : addMonths(planningStartMonth, legacyPlanningMonths - 1);
-  const entries = (Array.isArray(snapshot.entries) ? snapshot.entries : []).map((entry) => ({
-    ...entry,
-    category: migrateCategory(entry.category),
-    currency: currencyCode(entry.currency, displayCurrency),
-  })) as LedgerEntry[];
+  const entries = (Array.isArray(snapshot.entries) ? snapshot.entries : []).map((entry) => {
+    const allocations = sanitizeAllocations(entry.allocations, entry.amount);
+    return {
+      ...entry,
+      category: migrateCategory(entry.category),
+      currency: currencyCode(entry.currency, displayCurrency),
+      allocations,
+    };
+  }) as LedgerEntry[];
   const isModern = Number(snapshot.version) >= 2 || Array.isArray(storedData.assets);
   const assets = isModern ? sanitizeAssets(storedData.assets, displayCurrency) : [
     { id: "legacy-primary-krw", name: "Primary account", amount: finiteNonNegative(storedData.krwPrimary), currency: "KRW" },

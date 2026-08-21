@@ -25,8 +25,13 @@ test("builds a low-cost GPT-5.6 Luna request with strict structured output", () 
   assert.equal(request.text.format.strict, true);
   assert.equal(request.text.format.schema.additionalProperties, false);
   assert.deepEqual(request.text.format.schema.properties.currency.anyOf[0].enum, ["USD", "KRW", "EUR"]);
+  assert.equal(request.text.format.schema.properties.allocations.type, "array");
+  assert.equal(request.text.format.schema.properties.allocations.items.additionalProperties, false);
+  assert.deepEqual(request.text.format.schema.properties.allocations.items.properties.category.anyOf[0].enum, ["Food", "Shopping", "Other"]);
+  assert.ok(request.text.format.schema.required.includes("allocations"));
   assert.equal("uniqueItems" in request.text.format.schema.properties.uncertainFields, false);
   assert.match(request.input[0].content[0].text, /Target/);
+  assert.match(request.input[0].content[0].text, /line item/i);
 });
 
 test("sends receipt images at original detail for small-text extraction", () => {

@@ -24,6 +24,7 @@ const categories = {
 };
 const baseInput = { ...categories, today: "2026-08-20" };
 const expectedOutputFields = [
+  "allocations",
   "amount",
   "category",
   "countsTowardMonthlyBudget",
@@ -38,6 +39,11 @@ const assertSchema = (id, output) => {
   const parsed = JSON.parse(output);
   assert.deepEqual(Object.keys(parsed).sort(), expectedOutputFields, `${id}: output fields must match the strict schema`);
   assert.ok(Array.isArray(parsed.uncertainFields), `${id}: uncertainFields must be an array`);
+  assert.ok(Array.isArray(parsed.allocations), `${id}: allocations must be an array`);
+  for (const allocation of parsed.allocations) {
+    assert.deepEqual(Object.keys(allocation).sort(), ["amount", "category", "description", "uncertainFields"], `${id}: allocation fields must match the strict schema`);
+    assert.ok(Array.isArray(allocation.uncertainFields), `${id}: allocation uncertainFields must be an array`);
+  }
   return parsed;
 };
 
@@ -47,6 +53,18 @@ const assertExpected = (id, result, expected) => {
   }
   for (const field of expected.needsReview || []) {
     assert.ok(result.needsReview.includes(field), `${id}: ${field} must require review`);
+  }
+  if (expected.allocations) {
+    assert.equal(result.needsReview.includes("allocations"), false, `${id}: grounded allocations must not require review`);
+    assert.ok(result.allocationNeedsReview.every((fields) => fields.length === 0), `${id}: grounded allocation fields must not require review`);
+    const byCategory = Object.fromEntries(expected.allocations.map((item) => [item.category, 0]));
+    for (const allocation of result.draft.allocations) {
+      assert.ok(allocation.description, `${id}: every allocation needs a grounded description`);
+      if (typeof allocation.category === "string" && typeof allocation.amount === "number" && allocation.category in byCategory) byCategory[allocation.category] += allocation.amount;
+    }
+    for (const allocation of expected.allocations) {
+      assert.equal(byCategory[allocation.category], allocation.amount, `${id}: unexpected ${allocation.category} allocation`);
+    }
   }
 };
 
@@ -60,9 +78,9 @@ const createSyntheticReceipt = async () => {
         <body style="margin:0;background:#ececec;font-family:Arial,sans-serif;padding:42px">
           <main style="box-sizing:border-box;width:676px;min-height:880px;background:white;padding:54px;color:#111">
             <h1 style="font-size:42px;margin:0 0 34px">WHOLE FOODS MARKET</h1>
-            <p style="font-size:27px;line-height:1.65">Transaction date: 08/18/2026<br>Purchase category: Groceries<br>Payment method: VISA</p>
+            <p style="font-size:27px;line-height:1.65">Transaction date: 08/18/2026<br>Payment method: VISA</p>
             <hr style="margin:42px 0;border:0;border-top:3px solid #111">
-            <p style="font-size:30px;line-height:1.8">Fresh produce&nbsp;&nbsp;$28.10<br>Pantry items&nbsp;&nbsp;$31.00<br>Tax&nbsp;&nbsp;$4.17</p>
+            <p style="font-size:30px;line-height:1.8">Fresh produce&nbsp;&nbsp;$28.10<br>Kitchen storage bin&nbsp;&nbsp;$35.17</p>
             <hr style="margin:42px 0;border:0;border-top:3px solid #111">
             <p style="font-size:44px;font-weight:700">TOTAL USD $63.27</p>
           </main>
@@ -108,10 +126,14 @@ const cases = [
 ];
 
 cases.push({
-  id: "receipt-image",
+  id: "mixed-category-receipt-image",
   input: { ...baseInput, description: "", imageDataUrl: await createSyntheticReceipt() },
   expected: {
-    draft: { date: "2026-08-18", type: "expense", category: "Food", amount: 63.27, currency: "USD", countsTowardMonthlyBudget: true },
+    draft: { date: "2026-08-18", type: "expense", category: "Shopping", amount: 63.27, currency: "USD", countsTowardMonthlyBudget: true },
+    allocations: [
+      { category: "Food", amount: 28.1 },
+      { category: "Shopping", amount: 35.17 },
+    ],
   },
 });
 

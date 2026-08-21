@@ -139,3 +139,56 @@ test("converts foreign money with the user-entered units-per-display-currency ra
   assert.equal(toDisplayAmount(100, "EUR", "USD", {}), null);
   assert.equal(toDisplayAmount(100, "EUR", "USD", { EUR: 0 }), null);
 });
+
+test("normalization preserves a reconciled itemized receipt allocation", () => {
+  const normalized = normalizeSnapshot(legacySnapshot({
+    version: 2,
+    data: {
+      assets: [],
+      displayCurrency: "USD",
+      exchangeRates: {},
+      planningStartMonth: "2026-08",
+      planningEndMonth: "2028-07",
+      monthlyIncome: 0,
+    },
+    entries: [{
+      id: "mixed-receipt",
+      date: "2026-08-20",
+      type: "expense",
+      category: "Food",
+      description: "Target",
+      amount: 30,
+      currency: "USD",
+      allocations: [
+        { description: "Milk", category: "Food", amount: 5 },
+        { description: "Storage bin", category: "Shopping", amount: 25 },
+      ],
+    }],
+    expenseCategories: ["Food", "Shopping", "Other"],
+  }), "2026-08");
+
+  assert.deepEqual(normalized.entries[0].allocations, [
+    { description: "Milk", category: "Food", amount: 5 },
+    { description: "Storage bin", category: "Shopping", amount: 25 },
+  ]);
+});
+
+test("normalization drops a corrupted receipt allocation instead of distorting category totals", () => {
+  const normalized = normalizeSnapshot(legacySnapshot({
+    entries: [{
+      id: "broken-split",
+      date: "2026-08-20",
+      type: "expense",
+      category: "Food",
+      description: "Target",
+      amount: 30,
+      currency: "USD",
+      allocations: [
+        { description: "Milk", category: "Food", amount: 5 },
+        { description: "Storage bin", category: "Shopping", amount: 20 },
+      ],
+    }],
+  }), "2026-08");
+
+  assert.equal(normalized.entries[0].allocations, undefined);
+});
