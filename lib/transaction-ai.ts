@@ -266,14 +266,28 @@ export function normalizeTransactionAiDraft(value: unknown, categories: Transact
     if (!allocation.category || allocation.amount === null) return primary;
     return !primary || primary.amount === null || allocation.amount > primary.amount ? allocation : primary;
   }, null);
+  const category = type === "expense" && groundedPrimaryAllocation
+    ? groundedPrimaryAllocation.category
+    : type
+      ? normalizeCategory(payload.category, allowedCategories)
+      : null;
+  const budgetFlagWasDerived = type === "expense"
+    && typeof payload.countsTowardMonthlyBudget !== "boolean"
+    && category !== null;
   const draft: TransactionAiDraft = {
     date: isDateKey(payload.date) ? payload.date : null,
     type,
-    category: type === "expense" && groundedPrimaryAllocation ? groundedPrimaryAllocation.category : type ? normalizeCategory(payload.category, allowedCategories) : null,
+    category,
     description: normalizeDescription(payload.description),
     amount: normalizeAmount(payload.amount),
     currency: typeof payload.currency === "string" && categories.currencies.includes(payload.currency) ? payload.currency : null,
-    countsTowardMonthlyBudget: type === "expense" && typeof payload.countsTowardMonthlyBudget === "boolean" ? payload.countsTowardMonthlyBudget : null,
+    countsTowardMonthlyBudget: type === "expense"
+      ? typeof payload.countsTowardMonthlyBudget === "boolean"
+        ? payload.countsTowardMonthlyBudget
+        : category !== null
+          ? category !== "Tuition"
+          : null
+      : null,
     allocations,
   };
   const uncertainFields = new Set(Array.isArray(payload.uncertainFields)
@@ -281,6 +295,7 @@ export function normalizeTransactionAiDraft(value: unknown, categories: Transact
     : []);
   const needsReview = reviewFields.filter((field) => {
     if (field === "countsTowardMonthlyBudget" && type === "income") return false;
+    if (field === "countsTowardMonthlyBudget" && budgetFlagWasDerived) return false;
     if (field === "category" && groundedPrimaryAllocation) return false;
     if (field === "allocations") {
       if (uncertainFields.has(field)) return true;
