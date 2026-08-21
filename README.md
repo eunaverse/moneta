@@ -37,9 +37,10 @@ GitHub Actions secrets:
 ## PR preview
 
 Pull requests run the same complete quality gate before any preview action. An
-approved internal PR can then upload a Cloudflare Worker version with the stable
-`pr-<number>` alias; it never runs `wrangler deploy` or changes production
-traffic. Fork PRs never receive repository secrets and never upload a preview.
+approved internal PR can then deploy a dedicated PR-scoped Worker named
+`pr-<number>-moneta`. That preserves the stable preview URL while keeping the
+production `moneta` Worker untouched. Closing the PR deletes the entire preview
+Worker. Fork PRs never receive repository secrets and never upload a preview.
 
 Preview deployment uses a dedicated, empty/synthetic Supabase project. The
 required repository gates are `PR_PREVIEW_ENABLED=true` and
