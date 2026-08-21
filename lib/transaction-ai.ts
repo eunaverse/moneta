@@ -1,4 +1,4 @@
-export const TRANSACTION_AI_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
+export const TRANSACTION_AI_MODEL = "gpt-5.6-luna";
 export const TRANSACTION_AI_IMAGE_LIMIT = 5 * 1024 * 1024;
 
 const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -37,6 +37,22 @@ export type TransactionAiDependencies = {
   analyze: (input: TransactionAiAnalysisInput) => Promise<unknown>;
 };
 
+export type TransactionAiReasoningEffort = "none" | "low";
+
+export type OpenAiTransactionAnalysis = {
+  output: string;
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  };
+};
+
+type OpenAiTransactionOptions = {
+  fetch?: typeof globalThis.fetch;
+  reasoningEffort?: TransactionAiReasoningEffort;
+};
+
 export const transactionAiJsonSchema = {
   type: "object",
   additionalProperties: false,
@@ -51,11 +67,102 @@ export const transactionAiJsonSchema = {
     uncertainFields: {
       type: "array",
       items: { type: "string", enum: [...reviewFields] },
-      uniqueItems: true,
     },
   },
   required: ["date", "type", "category", "description", "amount", "currency", "countsTowardMonthlyBudget", "uncertainFields"],
 } as const;
+
+export function buildOpenAiTransactionRequest(input: TransactionAiAnalysisInput, reasoningEffort: TransactionAiReasoningEffort = "none") {
+  const content: Array<Record<string, unknown>> = [
+    { type: "input_text", text: transactionAiPrompt(input) },
+  ];
+  if (input.imageDataUrl) {
+    content.push({
+      type: "input_image",
+      image_url: input.imageDataUrl,
+      detail: "original",
+    });
+  }
+
+  return {
+    model: TRANSACTION_AI_MODEL,
+    instructions: "Extract one financial transaction into the supplied schema for human review. Never invent unreadable or missing values.",
+    input: [{ role: "user", content }],
+    reasoning: { effort: reasoningEffort },
+    text: {
+      verbosity: "low",
+      format: {
+        type: "json_schema",
+        name: "moneta_transaction_draft",
+        strict: true,
+        schema: transactionAiJsonSchema,
+      },
+    },
+    max_output_tokens: 400,
+    store: false,
+  } as const;
+}
+
+const extractOpenAiOutput = (value: unknown) => {
+  if (!isRecord(value)) return null;
+  if (typeof value.output_text === "string" && value.output_text.trim()) return value.output_text;
+  if (!Array.isArray(value.output)) return null;
+
+  for (const item of value.output) {
+    if (!isRecord(item) || !Array.isArray(item.content)) continue;
+    for (const content of item.content) {
+      if (!isRecord(content)) continue;
+      if (content.type === "output_text" && typeof content.text === "string" && content.text.trim()) return content.text;
+    }
+  }
+  return null;
+};
+
+const extractOpenAiUsage = (value: unknown): OpenAiTransactionAnalysis["usage"] => {
+  if (!isRecord(value)) return undefined;
+  const inputTokens = value.input_tokens;
+  const outputTokens = value.output_tokens;
+  const totalTokens = value.total_tokens;
+  if (typeof inputTokens !== "number" || typeof outputTokens !== "number" || typeof totalTokens !== "number") return undefined;
+  return { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: totalTokens };
+};
+
+export async function analyzeTransactionWithOpenAI(
+  apiKey: string,
+  input: TransactionAiAnalysisInput,
+  options: OpenAiTransactionOptions = {},
+): Promise<OpenAiTransactionAnalysis> {
+  if (!apiKey.trim()) throw new Error("OpenAI API key is not configured.");
+  const fetcher = options.fetch || globalThis.fetch;
+  const response = await fetcher("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(buildOpenAiTransactionRequest(input, options.reasoningEffort || "none")),
+  });
+  if (!response.ok) {
+    let code = "";
+    try {
+      const errorPayload: unknown = await response.json();
+      if (isRecord(errorPayload) && isRecord(errorPayload.error) && typeof errorPayload.error.code === "string") {
+        code = errorPayload.error.code.replace(/[^a-z0-9_-]/gi, "").slice(0, 80);
+      }
+    } catch {
+      // Provider error bodies are optional and must never replace the sanitized status.
+    }
+    throw new Error(`OpenAI transaction analysis failed (${response.status}${code ? `: ${code}` : ""}).`);
+  }
+
+  const payload: unknown = await response.json();
+  const output = extractOpenAiOutput(payload);
+  if (!output) throw new Error("OpenAI did not return a transaction draft.");
+  return {
+    output,
+    usage: isRecord(payload) ? extractOpenAiUsage(payload.usage) : undefined,
+  };
+}
 
 const json = (body: unknown, status = 200) => Response.json(body, {
   status,

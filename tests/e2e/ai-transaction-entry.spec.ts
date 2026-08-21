@@ -29,6 +29,7 @@ test("turns a natural-language purchase into a reviewable draft before saving", 
   });
 
   const form = page.locator(".transaction-form");
+  await expect(form).toContainText("OpenAI");
   await form.getByLabel("Describe this transaction").fill("Yesterday I bought groceries at Target for $42.18");
   await form.getByRole("button", { name: "Create AI draft" }).click();
 

@@ -1,9 +1,5 @@
 import { env } from "cloudflare:workers";
-import { handleTransactionAiRequest, transactionAiJsonSchema, transactionAiPrompt, TRANSACTION_AI_MODEL } from "../../../../lib/transaction-ai";
-
-type WorkersAi = {
-  run(model: string, input: Record<string, unknown>): Promise<unknown>;
-};
+import { analyzeTransactionWithOpenAI, handleTransactionAiRequest } from "../../../../lib/transaction-ai";
 
 const publicEnv = import.meta.env as ImportMetaEnv & {
   readonly VITE_SUPABASE_URL?: string;
@@ -25,21 +21,13 @@ const authorize = async (accessToken: string) => {
 };
 
 export async function POST(request: Request) {
-  const workersAi = (env as Record<string, unknown>).AI as WorkersAi | undefined;
+  const openAiCredential = (env as Record<string, unknown>).MONETA_TRANSACTION_AI_TOKEN;
   return handleTransactionAiRequest(request, {
     authorize,
     analyze: async (input) => {
-      if (!workersAi) throw new Error("Workers AI binding is not configured.");
-      return workersAi.run(TRANSACTION_AI_MODEL, {
-        messages: [
-          { role: "system", content: "You extract financial transaction evidence into a strict JSON draft for human review. Never invent unreadable values." },
-          { role: "user", content: transactionAiPrompt(input) },
-        ],
-        ...(input.imageDataUrl ? { image: input.imageDataUrl } : {}),
-        guided_json: transactionAiJsonSchema,
-        max_tokens: 400,
-        temperature: 0,
-      });
+      if (typeof openAiCredential !== "string") throw new Error("OpenAI is not configured.");
+      const result = await analyzeTransactionWithOpenAI(openAiCredential, input);
+      return result.output;
     },
   });
 }

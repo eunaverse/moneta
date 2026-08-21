@@ -3,12 +3,12 @@
 A private multi-currency budget dashboard running on
 [vinext](https://github.com/cloudflare/vinext) and Cloudflare Workers.
 
-The transaction workspace can use Cloudflare Workers AI to turn a purchase
+The transaction workspace uses OpenAI GPT-5.6 Luna to turn a purchase
 description or payment screenshot into an editable draft. The server verifies
-the signed-in Supabase access token before inference, validates every model
-field against Moneta's transaction schema, and never saves the draft until the
-user presses **Save transaction**. The Workers AI binding is declared in
-`wrangler.jsonc`; no AI credential is shipped to the browser.
+the signed-in Supabase access token before inference, requests strict structured
+output, validates every model field against Moneta's transaction schema, and
+never saves the draft until the user presses **Save transaction**. The provider
+credential stays in a Cloudflare Worker secret and is never shipped to the browser.
 
 ## Prerequisites
 
@@ -32,6 +32,7 @@ GitHub Actions secrets:
 - `CLOUDFLARE_ACCOUNT_ID`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `MONETA_TRANSACTION_AI_TOKEN`
 
 ## Included Shape
 
@@ -107,12 +108,17 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm run build`: verify the vinext build output
 - `npm run deploy`: build and deploy the `moneta` Worker
 - `npm run test:unit`: run Node unit and repository-contract tests
+- `npm run test:ai:live`: call the configured model with synthetic text and receipt cases and grade its actual output
 - `npm run test:e2e`: run every feature journey in desktop and mobile Chromium
-- `npm run verify`: run lint, production build, unit tests, and the complete E2E suite
+- `npm run verify`: run lint, production build, unit tests, the live AI output eval, and the complete E2E suite
 - `npm run pr`: rerun the complete gate, push the topic branch, and create its pull request
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
-All changes follow the TDD and pull-request lifecycle in `AGENTS.md`. Install the Playwright browser once with `npx playwright install chromium` before the first local E2E run.
+`npm run verify` also runs the mandatory live AI output eval, so a server-side
+`MONETA_TRANSACTION_AI_TOKEN` (or the standard OpenAI environment variable for
+local evaluation) must be available. All changes follow the TDD and pull-request
+lifecycle in `AGENTS.md`. Install the Playwright browser once with
+`npx playwright install chromium` before the first local E2E run.
 
 ## Learn More
 

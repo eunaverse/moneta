@@ -60,12 +60,15 @@ Capture and inspect the populated assistant on mobile and desktop. Check textare
 ## Test buckets
 
 - `tests/transaction-ai.test.mjs`: API authorization, payload limits, model-output validation, and provider failures.
+- `tests/openai-transaction-provider.test.mjs`: OpenAI request shape, strict structured output, image detail, and sanitized provider failures.
+- `tests/ai-transaction-live-eval.mjs`: mandatory real-model grading for Korean text, missing evidence, and a synthetic receipt image.
 - `tests/e2e/ai-transaction-entry.spec.ts`: natural-language, image, review-before-save, error, and responsive browser journeys.
 - `tests/e2e/transactions.spec.ts`: existing manual CRUD and receipt validation remain regression coverage.
 
 ## Release gate
 
 - Focused unit and Playwright contracts pass.
+- The live model eval passes semantic field assertions; a mock response or HTTP 200 alone is insufficient.
 - `tests/e2e/feature-inventory.mjs` maps both AI input journeys to executable coverage.
 - `npm run verify` passes without skipped or weakened contracts.
 - Mobile and desktop screenshots show no clipping, overlap, hidden CTA, or horizontal overflow.
