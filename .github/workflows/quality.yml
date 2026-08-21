@@ -101,7 +101,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.PREVIEW_SUPABASE_ANON_KEY }}
         run: npm run build
 
-      - name: Upload a Cloudflare Worker version preview
+      - name: Deploy an isolated PR-scoped Cloudflare Worker
         id: upload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -151,7 +151,7 @@ jobs:
         with:
           node-version: 22.13.0
 
-      - name: Delete PR-tagged Cloudflare versions and their alias target
+      - name: Delete the PR-scoped Cloudflare Worker
         id: cleanup
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

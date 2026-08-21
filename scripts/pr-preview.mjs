@@ -20,6 +20,10 @@ export function previewAlias(prNumber) {
   return `pr-${value}`;
 }
 
+export function previewWorkerName(prNumber) {
+  return `${previewAlias(prNumber)}-${WORKER_NAME}`;
+}
+
 const previewTag = (prNumber) => `moneta-${previewAlias(prNumber)}`;
 
 export function validatePreviewSupabase({ url, anonKey, projectRef, productionProjectRef }) {
@@ -49,7 +53,7 @@ export function validatePreviewSupabase({ url, anonKey, projectRef, productionPr
   return { url: parsed.origin, projectRef: expectedRef };
 }
 
-export function parseVersionUpload(output, alias) {
+export function parsePreviewDeploy(output, workerName) {
   const entries = String(output)
     .split("\n")
     .filter(Boolean)
@@ -60,31 +64,30 @@ export function parseVersionUpload(output, alias) {
         return [];
       }
     });
-  const upload = entries.findLast((entry) => entry.type === "version-upload");
-  if (!upload?.version_id || upload.worker_name !== WORKER_NAME || !upload.preview_alias_url) {
-    throw new Error("Wrangler did not return a Moneta preview version and alias URL.");
+  const upload = entries.findLast((entry) => entry.type === "deploy");
+  if (!upload?.version_id || upload.worker_name !== workerName || !Array.isArray(upload.targets)) {
+    throw new Error("Wrangler did not return the expected PR-scoped Worker deployment.");
   }
 
-  const previewUrl = new URL(upload.preview_alias_url);
-  const expectedPrefix = `${alias}-${WORKER_NAME}.`;
-  if (
-    previewUrl.protocol !== "https:" ||
-    !previewUrl.hostname.startsWith(expectedPrefix) ||
-    !previewUrl.hostname.endsWith(".workers.dev")
-  ) {
-    throw new Error("Wrangler returned an unexpected preview alias URL.");
+  const target = upload.targets.find((value) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" &&
+        url.hostname.startsWith(`${workerName}.`) &&
+        url.hostname.endsWith(".workers.dev") &&
+        url.pathname === "/" &&
+        !url.search &&
+        !url.hash;
+    } catch {
+      return false;
+    }
+  });
+  if (!target) {
+    throw new Error("Wrangler did not return the PR-scoped Worker URL.");
   }
 
+  const previewUrl = new URL(target);
   return { versionId: upload.version_id, previewUrl: previewUrl.origin };
-}
-
-export function selectPreviewVersions(versions, prNumber, keepVersionId) {
-  const tag = previewTag(prNumber);
-  return versions.filter((version) => (
-    version?.id &&
-    version.id !== keepVersionId &&
-    version.annotations?.["workers/tag"] === tag
-  ));
 }
 
 export async function withSecretFile(secret, callback, temporaryPrefix = join(tmpdir(), "moneta-preview-")) {
@@ -101,53 +104,40 @@ export async function withSecretFile(secret, callback, temporaryPrefix = join(tm
   }
 }
 
-const cloudflareRequest = async (path, { method = "GET" } = {}) => {
-  const accountId = required(process.env.CLOUDFLARE_ACCOUNT_ID, "CLOUDFLARE_ACCOUNT_ID");
-  const token = required(process.env.CLOUDFLARE_API_TOKEN, "CLOUDFLARE_API_TOKEN");
-  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.success === false) {
-    const codes = Array.isArray(payload.errors)
-      ? payload.errors.map(({ code }) => code).filter(Boolean).join(", ")
-      : "unknown";
-    throw new Error(`Cloudflare API request failed (${response.status}; codes: ${codes}).`);
-  }
-  return payload;
-};
-
-const listWorkerVersions = async () => {
-  const versions = [];
-  for (let page = 1; page <= 50; page += 1) {
-    const payload = await cloudflareRequest(
-      `/workers/workers/${WORKER_NAME}/versions?page=${page}&per_page=100`,
-    );
-    const pageVersions = Array.isArray(payload.result)
-      ? payload.result
-      : Array.isArray(payload.result?.items)
-        ? payload.result.items
-        : [];
-    versions.push(...pageVersions);
-    const totalPages = Number(payload.result_info?.total_pages ?? 1);
-    if (page >= totalPages || pageVersions.length === 0) break;
-  }
-  return versions;
-};
-
-const cleanupPreviewVersions = async (prNumber, keepVersionId) => {
-  const versions = await listWorkerVersions();
-  const targets = selectPreviewVersions(versions, prNumber, keepVersionId);
-  for (const { id } of targets) {
-    await cloudflareRequest(`/workers/workers/${WORKER_NAME}/versions/${encodeURIComponent(id)}`, {
-      method: "DELETE",
+export const createCloudflareRequest = ({ fetchImpl = fetch, environment = process.env } = {}) => (
+  async (path, { method = "GET", allowErrorCodes = [] } = {}) => {
+    const accountId = required(environment.CLOUDFLARE_ACCOUNT_ID, "CLOUDFLARE_ACCOUNT_ID");
+    const token = required(environment.CLOUDFLARE_API_TOKEN, "CLOUDFLARE_API_TOKEN");
+    const response = await fetchImpl(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
     });
+    const payload = await response.json().catch(() => ({}));
+    const errorCodes = Array.isArray(payload.errors)
+      ? payload.errors.map(({ code }) => code).filter(Boolean)
+      : [];
+    if (response.status === 404 && errorCodes.some((code) => allowErrorCodes.includes(code))) {
+      return { notFound: true };
+    }
+    if (!response.ok || payload.success === false) {
+      const codes = errorCodes.join(", ") || "unknown";
+      throw new Error(`Cloudflare API request failed (${response.status}; codes: ${codes}).`);
+    }
+    return payload;
   }
-  return targets.length;
+);
+
+const cloudflareRequest = createCloudflareRequest();
+
+export const deletePreviewWorker = async (prNumber, request = cloudflareRequest) => {
+  const result = await request(`/workers/scripts/${encodeURIComponent(previewWorkerName(prNumber))}`, {
+    method: "DELETE",
+    allowErrorCodes: [10007],
+  });
+  return result.notFound ? 0 : 1;
 };
 
 const writeOutputs = async (values) => {
@@ -169,7 +159,7 @@ const validateCommand = () => {
 const uploadCommand = async () => {
   validateCommand();
   const prNumber = required(process.env.PR_NUMBER, "PR_NUMBER");
-  const alias = previewAlias(prNumber);
+  const workerName = previewWorkerName(prNumber);
   const sha = required(process.env.PREVIEW_HEAD_SHA, "PREVIEW_HEAD_SHA").slice(0, 12);
   const configPath = "dist/server/wrangler.json";
   await readFile(configPath, "utf8");
@@ -178,9 +168,9 @@ const uploadCommand = async () => {
     const outputPath = join(directory, "wrangler-output.jsonl");
     const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.meta.url));
     const invocation = spawnSync(wrangler, [
-      "versions", "upload",
+      "deploy",
       "--config", configPath,
-      "--preview-alias", alias,
+      "--name", workerName,
       "--tag", previewTag(prNumber),
       "--message", `PR #${prNumber} ${sha}`,
       "--secrets-file", secretPath,
@@ -193,17 +183,15 @@ const uploadCommand = async () => {
       },
       stdio: "inherit",
     });
-    if (invocation.status !== 0) throw new Error(`Wrangler preview upload failed (${invocation.status ?? "unknown"}).`);
-    return parseVersionUpload(await readFile(outputPath, "utf8"), alias);
+    if (invocation.status !== 0) throw new Error(`Wrangler preview deploy failed (${invocation.status ?? "unknown"}).`);
+    return parsePreviewDeploy(await readFile(outputPath, "utf8"), workerName);
   });
 
-  const deletedCount = await cleanupPreviewVersions(prNumber, result.versionId);
   await writeOutputs({
     preview_url: result.previewUrl,
     version_id: result.versionId,
-    stale_versions_deleted: deletedCount,
   });
-  console.log(`Uploaded ${alias} without changing production traffic; removed ${deletedCount} stale version(s).`);
+  console.log(`Deployed ${workerName} without changing the production ${WORKER_NAME} Worker.`);
 };
 
 const githubRequest = async (path, { method = "GET", body } = {}) => {
@@ -265,16 +253,16 @@ const deactivatePreviewDeployments = async () => {
 
 const publishCommand = async () => {
   const previewUrl = new URL(required(process.env.PREVIEW_URL, "PREVIEW_URL"));
-  const expectedPrefix = `${previewAlias(process.env.PR_NUMBER)}-${WORKER_NAME}.`;
+  const expectedPrefix = `${previewWorkerName(process.env.PR_NUMBER)}.`;
   if (!previewUrl.hostname.startsWith(expectedPrefix) || !previewUrl.hostname.endsWith(".workers.dev")) {
-    throw new Error("PREVIEW_URL is not a Moneta Workers preview alias.");
+    throw new Error("PREVIEW_URL is not the PR-scoped Moneta Worker.");
   }
   const versionId = required(process.env.VERSION_ID, "VERSION_ID");
   const body = `${COMMENT_MARKER}\n## Moneta PR preview\n\n` +
     `- Preview: ${previewUrl.origin}\n` +
     `- Worker version: \`${versionId}\`\n` +
     `- Database: isolated preview Supabase project (never production)\n\n` +
-    `The alias is updated after the full quality gate passes. This URL is public unless Cloudflare Access is separately enabled. Use synthetic data only.`;
+    `The PR-scoped Worker is updated after the full quality gate passes. This URL is public unless Cloudflare Access is separately enabled. Use synthetic data only.`;
   await upsertPreviewComment(body);
   await appendFile(
     required(process.env.GITHUB_STEP_SUMMARY, "GITHUB_STEP_SUMMARY"),
@@ -288,21 +276,23 @@ const publishCommand = async () => {
 
 const cleanupCommand = async () => {
   const prNumber = required(process.env.PR_NUMBER, "PR_NUMBER");
-  const deletedCount = await cleanupPreviewVersions(prNumber);
+  const deletedCount = await deletePreviewWorker(prNumber);
   await writeOutputs({ deleted_count: deletedCount });
-  console.log(`Deleted ${deletedCount} tagged preview version(s) for ${previewAlias(prNumber)}.`);
+  console.log(deletedCount
+    ? `Deleted the ${previewWorkerName(prNumber)} preview Worker.`
+    : `The ${previewWorkerName(prNumber)} preview Worker was already absent.`);
 };
 
 const publishClosedCommand = async () => {
   const deletedCount = Number(process.env.DELETED_COUNT ?? 0);
   await deactivatePreviewDeployments();
   const body = `${COMMENT_MARKER}\n## Moneta PR preview closed\n\n` +
-    `The PR preview is no longer active. ${deletedCount} tagged Cloudflare version(s) were deleted. ` +
+    `The PR preview is no longer active. The PR-scoped Cloudflare Worker was ${deletedCount ? "deleted" : "already absent"}. ` +
     `The shared preview Supabase project remains isolated from production and contains no production data.`;
   await upsertPreviewComment(body);
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   if (summaryPath) {
-    await appendFile(summaryPath, `## Moneta PR preview cleanup\n\nDeleted ${deletedCount} tagged version(s).\n`, "utf8");
+    await appendFile(summaryPath, `## Moneta PR preview cleanup\n\nPR-scoped Worker ${deletedCount ? "deleted" : "already absent"}.\n`, "utf8");
   }
 };
 
