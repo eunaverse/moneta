@@ -2,9 +2,17 @@ export const TRANSACTION_AI_MODEL = "gpt-5.6-luna";
 export const TRANSACTION_AI_IMAGE_LIMIT = 5 * 1024 * 1024;
 
 const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const reviewFields = ["date", "type", "category", "description", "amount", "currency", "countsTowardMonthlyBudget"] as const;
+const reviewFields = ["date", "type", "category", "description", "amount", "currency", "countsTowardMonthlyBudget", "allocations"] as const;
+const allocationReviewFields = ["category", "description", "amount"] as const;
 
 export type TransactionAiReviewField = typeof reviewFields[number];
+export type TransactionAiAllocationReviewField = typeof allocationReviewFields[number];
+
+export type TransactionAiAllocationDraft = {
+  category: string | null;
+  description: string | null;
+  amount: number | null;
+};
 
 export type TransactionAiDraft = {
   date: string | null;
@@ -14,11 +22,13 @@ export type TransactionAiDraft = {
   amount: number | null;
   currency: string | null;
   countsTowardMonthlyBudget: boolean | null;
+  allocations: TransactionAiAllocationDraft[];
 };
 
 export type TransactionAiResult = {
   draft: TransactionAiDraft;
   needsReview: TransactionAiReviewField[];
+  allocationNeedsReview: TransactionAiAllocationReviewField[][];
 };
 
 export type TransactionAiCategories = {
@@ -54,7 +64,7 @@ type OpenAiTransactionOptions = {
   reasoningEffort?: TransactionAiReasoningEffort;
 };
 
-export const transactionAiJsonSchemaFor = (currencies: string[]) => ({
+export const transactionAiJsonSchemaFor = (currencies: string[], expenseCategories: string[] = ["Food", "Shopping", "Other"]) => ({
   type: "object",
   additionalProperties: false,
   properties: {
@@ -65,12 +75,30 @@ export const transactionAiJsonSchemaFor = (currencies: string[]) => ({
     amount: { anyOf: [{ type: "number" }, { type: "null" }] },
     currency: { anyOf: [{ type: "string", enum: currencies }, { type: "null" }] },
     countsTowardMonthlyBudget: { anyOf: [{ type: "boolean" }, { type: "null" }] },
+    allocations: {
+      type: "array",
+      maxItems: 40,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          category: { anyOf: [{ type: "string", enum: expenseCategories }, { type: "null" }] },
+          description: { anyOf: [{ type: "string" }, { type: "null" }] },
+          amount: { anyOf: [{ type: "number" }, { type: "null" }] },
+          uncertainFields: {
+            type: "array",
+            items: { type: "string", enum: [...allocationReviewFields] },
+          },
+        },
+        required: ["category", "description", "amount", "uncertainFields"],
+      },
+    },
     uncertainFields: {
       type: "array",
       items: { type: "string", enum: [...reviewFields] },
     },
   },
-  required: ["date", "type", "category", "description", "amount", "currency", "countsTowardMonthlyBudget", "uncertainFields"],
+  required: ["date", "type", "category", "description", "amount", "currency", "countsTowardMonthlyBudget", "allocations", "uncertainFields"],
 } as const);
 
 export const transactionAiJsonSchema = transactionAiJsonSchemaFor(["USD", "KRW"]);
@@ -89,7 +117,7 @@ export function buildOpenAiTransactionRequest(input: TransactionAiAnalysisInput,
 
   return {
     model: TRANSACTION_AI_MODEL,
-    instructions: "Extract one financial transaction into the supplied schema for human review. Never invent unreadable or missing values.",
+    instructions: "Extract one financial transaction and any readable receipt line items into the supplied schema for human review. Never invent unreadable or missing values.",
     input: [{ role: "user", content }],
     reasoning: { effort: reasoningEffort },
     text: {
@@ -98,10 +126,10 @@ export function buildOpenAiTransactionRequest(input: TransactionAiAnalysisInput,
         type: "json_schema",
         name: "moneta_transaction_draft",
         strict: true,
-        schema: transactionAiJsonSchemaFor(input.currencies),
+        schema: transactionAiJsonSchemaFor(input.currencies, input.expenseCategories),
       },
     },
-    max_output_tokens: 400,
+    max_output_tokens: 2_400,
     store: false,
   } as const;
 }
@@ -219,23 +247,52 @@ export function normalizeTransactionAiDraft(value: unknown, categories: Transact
   const payload = parseModelPayload(value);
   const type = payload.type === "expense" || payload.type === "income" ? payload.type : null;
   const allowedCategories = type === "income" ? categories.incomeCategories : categories.expenseCategories;
+  const rawAllocations = type === "expense" && Array.isArray(payload.allocations) ? payload.allocations.slice(0, 40) : [];
+  const allocationNeedsReview: TransactionAiAllocationReviewField[][] = [];
+  const allocations = rawAllocations.map((value) => {
+    const allocation = isRecord(value) ? value : {};
+    const normalized: TransactionAiAllocationDraft = {
+      category: normalizeCategory(allocation.category, categories.expenseCategories),
+      description: normalizeDescription(allocation.description),
+      amount: normalizeAmount(allocation.amount),
+    };
+    const uncertainFields = new Set(Array.isArray(allocation.uncertainFields)
+      ? allocation.uncertainFields.filter((field): field is TransactionAiAllocationReviewField => allocationReviewFields.includes(field as TransactionAiAllocationReviewField))
+      : []);
+    allocationNeedsReview.push(allocationReviewFields.filter((field) => normalized[field] === null || uncertainFields.has(field)));
+    return normalized;
+  });
+  const groundedPrimaryAllocation = allocations.reduce<TransactionAiAllocationDraft | null>((primary, allocation) => {
+    if (!allocation.category || allocation.amount === null) return primary;
+    return !primary || primary.amount === null || allocation.amount > primary.amount ? allocation : primary;
+  }, null);
   const draft: TransactionAiDraft = {
     date: isDateKey(payload.date) ? payload.date : null,
     type,
-    category: type ? normalizeCategory(payload.category, allowedCategories) : null,
+    category: type === "expense" && groundedPrimaryAllocation ? groundedPrimaryAllocation.category : type ? normalizeCategory(payload.category, allowedCategories) : null,
     description: normalizeDescription(payload.description),
     amount: normalizeAmount(payload.amount),
     currency: typeof payload.currency === "string" && categories.currencies.includes(payload.currency) ? payload.currency : null,
     countsTowardMonthlyBudget: type === "expense" && typeof payload.countsTowardMonthlyBudget === "boolean" ? payload.countsTowardMonthlyBudget : null,
+    allocations,
   };
   const uncertainFields = new Set(Array.isArray(payload.uncertainFields)
     ? payload.uncertainFields.filter((field): field is TransactionAiReviewField => reviewFields.includes(field as TransactionAiReviewField))
     : []);
   const needsReview = reviewFields.filter((field) => {
     if (field === "countsTowardMonthlyBudget" && type === "income") return false;
+    if (field === "category" && groundedPrimaryAllocation) return false;
+    if (field === "allocations") {
+      if (uncertainFields.has(field)) return true;
+      if (allocations.length === 0) return false;
+      const allocationTotal = allocations.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+      return allocationNeedsReview.some((fields) => fields.length > 0)
+        || draft.amount === null
+        || Math.abs(allocationTotal - draft.amount) > 0.009;
+    }
     return draft[field] === null || uncertainFields.has(field);
   });
-  return { draft, needsReview };
+  return { draft, needsReview, allocationNeedsReview };
 }
 
 const parseCategoryList = (value: FormDataEntryValue | null, fallback: string[]) => {
@@ -339,6 +396,9 @@ export function transactionAiPrompt(input: TransactionAiAnalysisInput) {
     `Allowed income categories: ${input.incomeCategories.join(", ")}.`,
     `Allowed ISO 4217 currencies: ${input.currencies.join(", ")}. Use only one of these codes and infer it only from clear evidence.`,
     "Use only an allowed category. The amount must be the final transaction total, not a subtotal, tax, balance, card suffix, or loyalty number.",
+    "For an itemized expense receipt, put each readable purchased line item in allocations with its own short description, allowed expense category, and final line amount.",
+    "Do not put receipt headers, subtotals, payment methods, card digits, or loyalty balances in allocations. Include taxes, tips, discounts, and fees only when needed so allocation amounts reconcile exactly to the final transaction total; use Other when their category is not grounded.",
+    "For a non-itemized description, income, or payment screenshot, return an empty allocations array. The top-level category should be the largest grounded allocation category when allocations are present.",
     "Use a short merchant-or-purpose description. Mark any uncertain or unreadable field in uncertainFields. Use null instead of guessing a missing field.",
     `User description: ${input.description || "(none; inspect the image only)"}`,
   ].join("\n");

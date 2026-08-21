@@ -143,7 +143,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /overview-transaction-preview/);
   assert.match(page, /className="mobile-menu-button"/);
   assert.match(page, /className="mobile-drawer"/);
-  assert.match(page, /className="mobile-quick-add"/);
+  assert.doesNotMatch(page, /className="mobile-quick-add"/);
   assert.doesNotMatch(page, /className="mobile-transaction-fab"/);
   assert.match(page, /aria-label="Open menu"/);
   assert.doesNotMatch(page, /<header className="mobile-header">.*?<select.*?<\/header>/s);
@@ -201,8 +201,10 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /Manage scheduled payments/);
   assert.match(page, /ADD PAYMENT/);
   assert.match(css, /button:focus-visible/);
-  assert.match(css, /\.mobile-quick-add/);
+  assert.doesNotMatch(css, /\.mobile-quick-add/);
   assert.doesNotMatch(css, /\.mobile-transaction-fab/);
+  assert.match(page, /Receipt category split/);
+  assert.match(page, /allocations/);
   assert.match(page, /className="budget-amount-input"/);
   assert.match(css, /\.budget-amount-input:focus-within/);
   assert.match(layout, /title:\s*"Moneta — Finances at a glance"/);

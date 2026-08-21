@@ -17,6 +17,12 @@ export type BudgetState = {
   monthlyIncome: number;
 };
 
+export type LedgerAllocation = {
+  category: string;
+  description: string;
+  amount: number;
+};
+
 export type LedgerEntry = {
   id: string;
   date: string;
@@ -26,6 +32,7 @@ export type LedgerEntry = {
   amount: number;
   currency: string;
   countsTowardMonthlyBudget?: boolean;
+  allocations?: LedgerAllocation[];
   plannedExpenseId?: string;
   plannedExpenseMonth?: string;
   receiptId?: string;
