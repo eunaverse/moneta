@@ -248,6 +248,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const [activeReceiptUrl, setActiveReceiptUrl] = useState<string | null>(null);
   const [receiptError, setReceiptError] = useState("");
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [transactionDetailEntryId, setTransactionDetailEntryId] = useState<string | null>(null);
   const [selectionScope, setSelectionScope] = useState<SelectionScope | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [overviewTransactionLimit, setOverviewTransactionLimit] = useState(3);
@@ -275,6 +276,9 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const submittedSnapshotJsonsRef = useRef(new Set<string>());
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const localeInitializedRef = useRef(false);
+  const transactionDetailDialogRef = useRef<HTMLElement>(null);
+  const transactionDetailCloseRef = useRef<HTMLButtonElement>(null);
+  const transactionDetailOpenerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const savedLocale = window.localStorage.getItem("moneta-locale");
@@ -812,6 +816,13 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   });
   const visibleMonthEntries = filteredMonthEntries.slice(0, transactionLimit);
   const recentEntries = [...entries].sort((first, second) => second.date.localeCompare(first.date));
+  const transactionDetailEntry = transactionDetailEntryId ? entries.find((entry) => entry.id === transactionDetailEntryId) : undefined;
+  const transactionDetailItems = transactionDetailEntry ? entryAllocations(transactionDetailEntry) : [];
+  const transactionDetailHasAllocations = Boolean(transactionDetailEntry?.allocations?.length);
+  const transactionDetailCategories = transactionDetailEntry ? entryCategoryNames(transactionDetailEntry) : [];
+  const transactionDetailItemsTotal = transactionDetailItems.reduce((sum, allocation) => sum + allocation.amount, 0);
+  const transactionDetailDifference = transactionDetailEntry ? Math.round((transactionDetailEntry.amount - transactionDetailItemsTotal) * 100) / 100 : 0;
+  const transactionDetailTotalMatches = Math.abs(transactionDetailDifference) <= 0.009;
   const receiptAllocationTotal = draft.allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
   const receiptAllocationDifference = Math.round((draft.amount - receiptAllocationTotal) * 100) / 100;
   const receiptAllocationTotalMatches = Math.abs(receiptAllocationDifference) <= 0.009;
@@ -1186,6 +1197,54 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     setTransactionStatsLimit(5);
     setFixedCostLimit(8);
   };
+  const openTransactionDetail = (entry: LedgerEntry, opener: HTMLButtonElement) => {
+    if (selectionScope === "transactions") return;
+    transactionDetailOpenerRef.current = opener;
+    setTransactionDetailEntryId(entry.id);
+  };
+  const closeTransactionDetail = useCallback((restoreFocus = true) => {
+    setTransactionDetailEntryId(null);
+    const opener = transactionDetailOpenerRef.current;
+    transactionDetailOpenerRef.current = null;
+    if (restoreFocus && opener) window.requestAnimationFrame(() => opener.focus());
+  }, []);
+  useEffect(() => {
+    if (!transactionDetailEntry) return;
+    const previousOverflow = document.body.style.overflow;
+    const focusFrame = window.requestAnimationFrame(() => transactionDetailCloseRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeTransactionDetail();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = transactionDetailDialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [closeTransactionDetail, transactionDetailEntry]);
   const navigate = (next: View) => {
     if (next !== view) {
       const currentState = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
@@ -1254,9 +1313,11 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     const categoryLabel = entryCategoryNames(entry).join(" · ");
     return <div className={`transaction-row ${selecting ? "selecting" : ""}`} key={entry.id}>
       {selecting && <label className="row-check"><input type="checkbox" checked={selectedItems.includes(entry.id)} onChange={() => toggleSelectedItem(entry.id)} /><span aria-hidden="true">✓</span><b className="sr-only">Select {entry.description}</b></label>}
-      <i className={entry.type}>{categoryLabel[0]}</i>
-      <div className="transaction-entry-copy"><strong title={entry.description}>{entry.description}</strong><span title={`${entry.date.slice(5).replace("-", "/")} · ${categoryLabel}`}>{entry.date.slice(5).replace("-", "/")} · {categoryLabel}{entry.receiptId ? " · Receipt" : ""}{entry.plannedExpenseMonth ? ` · Plan ${entry.plannedExpenseMonth} paid` : ""}</span>{entry.type === "expense" && <small className={entry.countsTowardMonthlyBudget !== false ? "budget-status included" : "budget-status excluded"}>{entry.countsTowardMonthlyBudget !== false ? "Monthly budget" : "Outside budget"}</small>}</div>
-      <b className={`transaction-amount ${entry.type}`}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b>
+      <button type="button" className="transaction-row-open" aria-label={`View details for ${entry.description}`} disabled={selecting} onClick={(event) => openTransactionDetail(entry, event.currentTarget)}>
+        <i className={entry.type}>{categoryLabel[0]}</i>
+        <span className="transaction-entry-copy"><strong title={entry.description}>{entry.description}</strong><span title={`${entry.date.slice(5).replace("-", "/")} · ${categoryLabel}`}>{entry.date.slice(5).replace("-", "/")} · {categoryLabel}{entry.receiptId ? " · Receipt" : ""}{entry.plannedExpenseMonth ? ` · Plan ${entry.plannedExpenseMonth} paid` : ""}</span>{entry.type === "expense" && <small className={entry.countsTowardMonthlyBudget !== false ? "budget-status included" : "budget-status excluded"}>{entry.countsTowardMonthlyBudget !== false ? "Monthly budget" : "Outside budget"}</small>}</span>
+        <b className={`transaction-amount ${entry.type}`}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b>
+      </button>
       {receiptUrls[entry.id] ? <button type="button" className="receipt-thumb" aria-label={`View receipt for ${entry.description}`} onClick={() => setActiveReceiptUrl(receiptUrls[entry.id])}><img src={receiptUrls[entry.id]} alt="" /></button> : <span className="receipt-placeholder" />}
       <div className="row-actions"><button type="button" className="row-edit" aria-label={`Edit ${entry.description}`} onClick={() => editEntry(entry)}>Edit</button></div>
     </div>;
@@ -1319,7 +1380,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
           <article className={`month-card overview-budget-card ${!hasCategoryBudgetData ? "empty" : ""}`}><div className="card-heading"><div><span>{selectedMonth}</span><h2>This month&apos;s category budgets</h2></div><button onClick={() => navigate("budget")}>{hasCategoryBudgetData ? "Edit budgets" : "Add budget"}</button></div>{!hasCategoryBudgetData ? <div className="overview-budget-empty"><strong>No category budget yet</strong><span>Add limits for categories such as Food or Transport when you are ready to track monthly spending.</span></div> : <><div className="budget-remaining"><span>CATEGORY BUDGET REMAINING</span><strong className={budgetAvailable < 0 ? "danger-text" : "success-text"}>{money.format(budgetAvailable)}</strong></div>{monthlyBudgetAbovePlanSafe > 0 && <p className="plan-budget-warning" role="status">Your category budget is {money.format(monthlyBudgetAbovePlanSafe)}/month above the safe monthly spend.</p>}<div className="stacked-track"><i className="actual" style={{ width: `${Math.min(100, monthlyFlexibleBudgetForSelectedMonth > 0 ? monthlyBudgetExpenseTotal / monthlyFlexibleBudgetForSelectedMonth * 100 : 0)}%` }} /></div><div className="budget-breakdown two"><div><i className="budget-dot" /><span>Monthly category limits</span><strong>{money.format(monthlyFlexibleBudgetForSelectedMonth)}</strong></div><div><i className="actual-dot" /><span>Spent from category limits</span><strong>{money.format(monthlyBudgetExpenseTotal)}</strong></div></div><p className="clarity-note">This balance only includes expenses subtracted from category budgets. Other expenses still reduce your net worth.</p></>}</article>
           <article className="overview-transaction-preview">
             <div className="card-heading"><div><span>RECENT ACTIVITY</span><h2>Transactions</h2></div>{entries.length > 0 && <button type="button" onClick={() => navigate("transaction-history")}>View all →</button>}</div>
-            {entries.length === 0 ? <div className="preview-empty"><strong>No transactions yet</strong><span>Add your first income or expense to make this overview useful.</span><button type="button" onClick={goToAddTransaction}>Add your first transaction</button></div> : recentEntries.slice(0, overviewTransactionLimit).map((entry) => { const categoryLabel = entryCategoryNames(entry).join(" · "); return <button type="button" className="overview-transaction-row" key={entry.id} onClick={() => { chooseMonth(entry.date.slice(0, 7)); navigate("transactions"); }}><i className={entry.type}>{categoryLabel[0]}</i><span><strong title={entry.description}>{entry.description}</strong><small title={`${entry.date} · ${categoryLabel}`}>{entry.date} · {categoryLabel}</small></span><b className={entry.type}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b></button>; })}
+            {entries.length === 0 ? <div className="preview-empty"><strong>No transactions yet</strong><span>Add your first income or expense to make this overview useful.</span><button type="button" onClick={goToAddTransaction}>Add your first transaction</button></div> : recentEntries.slice(0, overviewTransactionLimit).map((entry) => { const categoryLabel = entryCategoryNames(entry).join(" · "); return <button type="button" className="overview-transaction-row" aria-label={`View details for ${entry.description}`} key={entry.id} onClick={(event) => openTransactionDetail(entry, event.currentTarget)}><i className={entry.type}>{categoryLabel[0]}</i><span><strong title={entry.description}>{entry.description}</strong><small title={`${entry.date} · ${categoryLabel}`}>{entry.date} · {categoryLabel}</small></span><b className={entry.type}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b></button>; })}
             <LoadMore shown={overviewTransactionLimit} total={recentEntries.length} step={3} onLoad={() => setOverviewTransactionLimit((current) => current + 3)} />
           </article>
         </div>}
@@ -1542,6 +1603,31 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
         </div>}
       </section>
       {undoAction && <div className="undo-toast" role="status"><span>{undoAction.message}</span><button type="button" onClick={() => { undoAction.restore(); setUndoAction(null); }}>Undo</button><button className="undo-close" type="button" aria-label="Dismiss" onClick={() => setUndoAction(null)}>×</button></div>}
+      {transactionDetailEntry && <div className="modal-backdrop transaction-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeTransactionDetail(); }}>
+        <section ref={transactionDetailDialogRef} className="transaction-detail-modal" role="dialog" aria-modal="true" aria-labelledby="transaction-detail-title" aria-describedby="transaction-detail-summary" tabIndex={-1}>
+          <div className="modal-heading transaction-detail-heading"><div><span>{transactionDetailHasAllocations ? "ITEMIZED RECEIPT" : "TRANSACTION DETAIL"}</span><h2 id="transaction-detail-title">{transactionDetailEntry.description}</h2><p id="transaction-detail-summary">{transactionDetailEntry.type === "income" ? "Saved income" : transactionDetailEntry.countsTowardMonthlyBudget !== false ? "Saved expense · counted in monthly category budgets" : "Saved expense · outside monthly category budgets"}</p></div><button ref={transactionDetailCloseRef} type="button" aria-label="Close transaction details" onClick={() => closeTransactionDetail()}>×</button></div>
+          <div className="transaction-detail-facts">
+            <div><span>DATE</span><strong>{transactionDetailEntry.date}</strong></div>
+            <div><span>CURRENCY</span><strong>{transactionDetailEntry.currency}</strong></div>
+            <div><span>{transactionDetailHasAllocations ? "RECEIPT TOTAL" : "TRANSACTION TOTAL"}</span><strong>{formatOriginalCurrency(transactionDetailEntry.amount, transactionDetailEntry.currency)}</strong></div>
+            <div><span>CATEGORIES</span><strong>{transactionDetailCategories.join(" · ") || "Uncategorized"}</strong></div>
+          </div>
+          <section className="transaction-detail-items" aria-labelledby="transaction-detail-items-title">
+            <div className="transaction-detail-section-heading"><div><span>{transactionDetailHasAllocations ? "RECEIPT ITEMS" : "SUMMARY ITEM"}</span><h3 id="transaction-detail-items-title">{transactionDetailHasAllocations ? `${transactionDetailItems.length} item${transactionDetailItems.length === 1 ? "" : "s"}` : "Saved transaction summary"}</h3></div><strong>{transactionDetailCategories.length} {transactionDetailCategories.length === 1 ? "category" : "categories"}</strong></div>
+            <div className="transaction-detail-item-list" role="list">{transactionDetailItems.map((item, index) => <article className="transaction-detail-item" role="listitem" key={`${item.description}-${index}`}><div><span>ITEM {index + 1}</span><strong>{item.description || transactionDetailEntry.description}</strong></div><span>{item.category || transactionDetailEntry.category || "Uncategorized"}</span><strong>{formatOriginalCurrency(item.amount, transactionDetailEntry.currency)}</strong></article>)}</div>
+          </section>
+          <section className={`transaction-detail-reconciliation ${transactionDetailTotalMatches ? "matched" : "warning"}`} aria-label="Transaction total reconciliation">
+            <div><span>{transactionDetailHasAllocations ? "Item total" : "Summary total"}</span><strong>{formatOriginalCurrency(transactionDetailItemsTotal, transactionDetailEntry.currency)}</strong></div>
+            <div><span>{transactionDetailHasAllocations ? "Receipt total" : "Transaction total"}</span><strong>{formatOriginalCurrency(transactionDetailEntry.amount, transactionDetailEntry.currency)}</strong></div>
+            <p>{transactionDetailTotalMatches
+              ? `${transactionDetailHasAllocations ? "Item" : "Summary"} total ${formatOriginalCurrency(transactionDetailItemsTotal, transactionDetailEntry.currency)} matches ${transactionDetailHasAllocations ? "receipt" : "transaction"} total ${formatOriginalCurrency(transactionDetailEntry.amount, transactionDetailEntry.currency)}.`
+              : transactionDetailDifference > 0
+                ? `${formatOriginalCurrency(transactionDetailDifference, transactionDetailEntry.currency)} of the ${transactionDetailHasAllocations ? "receipt" : "transaction"} total is not included in the item summary.`
+                : `The item summary is ${formatOriginalCurrency(Math.abs(transactionDetailDifference), transactionDetailEntry.currency)} over the ${transactionDetailHasAllocations ? "receipt" : "transaction"} total.`}</p>
+          </section>
+          <div className="transaction-detail-actions"><button type="button" className="transaction-detail-edit" onClick={() => { closeTransactionDetail(false); editEntry(transactionDetailEntry); }}>Edit transaction</button></div>
+        </section>
+      </div>}
       {assetEditorOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAssetEditorOpen(false); }}><section className="asset-editor" role="dialog" aria-modal="true" aria-labelledby="asset-editor-title"><div className="modal-heading"><div><span>CURRENT MONEY</span><h2 id="asset-editor-title">Edit assets &amp; rates</h2><p>Add only balances you actually hold. Foreign balances are converted with the rates you enter.</p></div><button aria-label="Close asset editor" onClick={() => setAssetEditorOpen(false)}>×</button></div><div className="asset-editor-list">{assetDraft.assets.map((asset, index) => <article className="asset-editor-row" key={asset.id}><label><span>NAME</span><input aria-label={`Asset ${index + 1} name`} value={asset.name} placeholder="e.g. Checking" onChange={(event) => updateAsset(asset.id, { name: event.target.value })} /></label><label><span>AMOUNT</span><input aria-label={`Asset ${index + 1} amount`} type="text" inputMode="decimal" value={formatEditableMoney(asset.amount)} placeholder="0" onChange={(event) => updateAsset(asset.id, { amount: parseEditableMoney(event.target.value) })} /></label><label><span>CURRENCY</span><select aria-label={`Asset ${index + 1} currency`} value={asset.currency} onChange={(event) => updateAsset(asset.id, { currency: event.target.value })}>{currencyCodes.map((currency) => <option key={currency} value={currency}>{currencyLabel(currency)}</option>)}</select></label><button type="button" aria-label={`Remove asset ${index + 1}`} onClick={() => removeAsset(asset.id)}>×</button></article>)}<button className="add-asset-button" type="button" onClick={addAsset}>＋ Add asset</button></div>{requiredAssetDraftCurrencies.length > 0 && <section className="asset-rate-section"><div><span>EXCHANGE RATES</span><p>Units of foreign currency per 1 {data.displayCurrency}</p></div><div>{requiredAssetDraftCurrencies.map((currency) => <label key={currency}><span>{currency} per {data.displayCurrency}</span><input aria-label={`${currency} per ${data.displayCurrency}`} type="text" inputMode="decimal" value={formatEditableMoney(assetDraft.exchangeRates[currency] || 0)} placeholder="0" onChange={(event) => setAssetDraft((current) => ({ ...current, exchangeRates: { ...current.exchangeRates, [currency]: parseEditableMoney(event.target.value) } }))} /></label>)}</div></section>}{missingAssetDraftRates.map((currency) => <p className="asset-rate-warning" role="alert" key={currency}>Add a positive exchange rate for {currency}</p>)}<div className="asset-income"><MoneyInput label="Monthly net income" value={assetDraft.monthlyIncome} onChange={(monthlyIncome) => setAssetDraft((current) => ({ ...current, monthlyIncome }))} unit={data.displayCurrency} step={100} /></div><button className="modal-done" disabled={missingAssetDraftRates.length > 0 || assetDraft.assets.some((asset) => !asset.name.trim())} onClick={saveAssetEditor}>Save balances</button></section></div>}
       {activeReceiptUrl && <div className="receipt-viewer" role="dialog" aria-modal="true" aria-label="Receipt photo"><button aria-label="Close receipt photo" onClick={() => setActiveReceiptUrl(null)}>×</button><img src={activeReceiptUrl} alt="Attached receipt" /></div>}
     </main>
