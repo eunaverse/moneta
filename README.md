@@ -34,6 +34,21 @@ GitHub Actions secrets:
 - `VITE_SUPABASE_ANON_KEY`
 - `MONETA_TRANSACTION_AI_TOKEN`
 
+## PR preview
+
+Pull requests run the same complete quality gate before any preview action. An
+approved internal PR can then upload a Cloudflare Worker version with the stable
+`pr-<number>` alias; it never runs `wrangler deploy` or changes production
+traffic. Fork PRs never receive repository secrets and never upload a preview.
+
+Preview deployment uses a dedicated, empty/synthetic Supabase project. The
+required repository gates are `PR_PREVIEW_ENABLED=true` and
+`PR_PREVIEW_ACCESS_REVIEWED=true`. The current no-cost decision keeps the Worker
+preview public because activating Cloudflare Access required payment and overage
+authorization. Configuration, narrow Google OAuth redirects, secret handling,
+cost findings, exposure controls, and close cleanup are documented in
+[`docs/engineering/pr-preview-environments.md`](docs/engineering/pr-preview-environments.md).
+
 ## Included Shape
 
 - edit site code under `app/`

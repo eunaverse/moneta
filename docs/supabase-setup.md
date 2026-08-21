@@ -4,9 +4,13 @@ Moneta uses Supabase Auth, Postgres, and private Storage. The browser only recei
 
 1. Create a Supabase project.
 2. Run `supabase/migrations/001_moneta.sql` in the Supabase SQL editor.
-3. In Authentication, enable email magic-link sign-in. For a private alpha, disable public sign-ups after inviting the intended accounts.
+3. In Authentication, enable Google sign-in. Add the exact Supabase project callback URL to the Google OAuth client, and disable public sign-ups after allowing the intended private-alpha accounts.
 4. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to the local and deployment environments.
 5. Add the deployed site URL to Authentication → URL Configuration → Redirect URLs.
+
+Production and PR previews must never share a Supabase project. See
+[`engineering/pr-preview-environments.md`](engineering/pr-preview-environments.md)
+before creating or enabling preview infrastructure.
 
 Row-level security ties every finance document and receipt path to `auth.uid()`. A user cannot query another user's data through the public client key.
 
