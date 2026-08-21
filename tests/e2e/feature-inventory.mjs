@@ -1,7 +1,8 @@
 export const features = [
   { id: "overview", journey: "See net worth, budget, and recent activity", spec: "tests/e2e/navigation-responsive.spec.ts" },
   { id: "overview-plan-outcome", journey: "See the safe monthly spending outcome before supporting account detail", spec: "tests/e2e/product-usability.spec.ts" },
-  { id: "focused-empty-planning", journey: "Start empty planning screens with one useful next action instead of inactive analysis", spec: "tests/e2e/product-usability.spec.ts" },
+  { id: "overview-budget-language", journey: "Understand category limits and category-counted spending without an unexplained outside-budget total", spec: "tests/e2e/product-usability.spec.ts" },
+  { id: "focused-empty-planning", journey: "Start empty planning screens with one useful next action and a concrete preview of future insights", spec: "tests/e2e/product-usability.spec.ts" },
   { id: "first-use-plan-setup", journey: "Understand the minimum setup needed before trusting forecasts", spec: "tests/e2e/design-clarity.spec.ts" },
   { id: "desktop-navigation", journey: "Open every primary workspace", spec: "tests/e2e/navigation-responsive.spec.ts" },
   { id: "mobile-navigation", journey: "Use the drawer to reach the transaction workspace", spec: "tests/e2e/navigation-responsive.spec.ts" },
@@ -14,7 +15,7 @@ export const features = [
   { id: "settings-responsive-structure", journey: "Give structural settings enough width and prevent control collisions", spec: "tests/e2e/workspace-layout.spec.ts" },
   { id: "settings-change-clarity", journey: "Understand autosave and what a primary currency change affects", spec: "tests/e2e/product-usability.spec.ts" },
   { id: "transaction-create-edit", journey: "Create and edit expense/income activity", spec: "tests/e2e/transactions.spec.ts" },
-  { id: "transaction-entry-method", journey: "Choose AI-assisted or manual entry without scanning both forms at once", spec: "tests/e2e/product-usability.spec.ts" },
+  { id: "transaction-entry-method", journey: "Choose AI-assisted or manual entry and understand whether an expense reduces category limits", spec: "tests/e2e/product-usability.spec.ts" },
   { id: "transaction-filter-delete-undo", journey: "Filter, delete, and undo activity", spec: "tests/e2e/transactions.spec.ts" },
   { id: "ai-transaction-description", journey: "Turn a natural-language purchase description into a reviewable transaction draft", spec: "tests/e2e/ai-transaction-entry.spec.ts" },
   { id: "ai-transaction-image", journey: "Turn a payment screenshot or receipt image into a reviewable transaction draft", spec: "tests/e2e/ai-transaction-entry.spec.ts" },
