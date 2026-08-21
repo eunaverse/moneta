@@ -5,7 +5,7 @@ test("opens every primary workspace and preserves layout", async ({ page }) => {
   await openApp(page);
   for (const name of ["Transactions", "Budget", "What-if", "Insights", "Settings", "Overview"]) {
     await openPrimaryView(page, name);
-    await expect(page.getByRole("heading", { name: name === "Overview" ? /Your money/ : name, level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: name === "Overview" ? /Make your money last/ : name, level: 1 })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   }
 });

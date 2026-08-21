@@ -1106,3 +1106,83 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   .calculation-tooltip { position: fixed; top: auto; right: 16px !important; bottom: calc(18px + env(safe-area-inset-bottom)); left: 16px !important; width: auto; max-height: 68vh; }
   .budget-month-heading > .month-heading-number { max-width: none; justify-self: start; text-align: left; }
 }
+
+/* Outcome-first hierarchy and focused empty states */
+.overview-title > div { max-width: 780px; }
+.overview-title h1 { font-size: clamp(42px, 4.6vw, 62px); }
+.overview-title p { max-width: 700px; font-size: 15px; line-height: 1.55; }
+.overview-plan-anchor { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 28px; margin-bottom: 20px; padding: 28px 30px; border: 1px solid #cbc0fa; border-left: 5px solid var(--purple); border-radius: 20px; background: linear-gradient(135deg, #eee9ff, #faf9ff 65%, #fff); }
+.overview-plan-anchor > div:first-child > span, .overview-plan-period > span { color: var(--purple-dark); font-size: 12px; font-weight: 900; letter-spacing: .12em; }
+.overview-plan-anchor h2 { margin: 9px 0 0; font-size: clamp(32px, 4.3vw, 54px); line-height: 1; letter-spacing: -.045em; }
+.overview-plan-anchor p { max-width: 700px; margin: 10px 0 0; color: #635d72; font-size: 14px; line-height: 1.5; }
+.overview-plan-period { min-width: 190px; padding-left: 26px; border-left: 1px solid #d6cef6; }
+.overview-plan-period > span, .overview-plan-period > strong { display: block; }
+.overview-plan-period > strong { margin-top: 8px; font-size: 18px; }
+.overview-plan-period > button { min-height: 44px; margin-top: 12px; padding: 10px 0; border: 0; background: transparent; color: var(--purple-dark); font-size: 12px; font-weight: 850; }
+.overview-plan-anchor.empty { border-color: #d8d4e2; border-left-color: #aaa3b8; background: #fff; }
+.overview-plan-anchor.empty h2 { color: #4f495d; }
+.overview-plan-anchor.empty .overview-plan-period { border-left-color: var(--line); }
+.wealth-overview-card.empty .wealth-track { background: #48415f; }
+.wealth-overview-card.empty .wealth-track > i { background: transparent; }
+.overview-budget-empty, .budget-month-empty, .category-budget-empty { display: grid; gap: 6px; justify-items: start; padding: 24px 0 4px; color: var(--muted); }
+.overview-budget-empty strong, .budget-month-empty strong, .category-budget-empty strong { color: var(--ink); font-size: 16px; }
+.overview-budget-empty span, .budget-month-empty span, .category-budget-empty span { max-width: 560px; font-size: 13px; line-height: 1.5; }
+.budget-month-section.empty { border-left-color: #b6afc4; }
+.category-budget-empty { min-height: 150px; place-content: center; justify-items: center; text-align: center; }
+
+/* Ask users to choose one transaction entry path at a time. */
+.transaction-entry-method { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.transaction-entry-method > button { min-width: 0; min-height: 88px; display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-areas: "entry-mode-icon entry-mode-title" "entry-mode-icon entry-mode-copy"; align-content: center; gap: 3px 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); text-align: left; }
+.transaction-entry-method > button > span { grid-area: entry-mode-icon; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: #f0edf6; color: #6b6478; }
+.transaction-entry-method > button > strong { grid-area: entry-mode-title; font-size: 13px; }
+.transaction-entry-method > button > small { grid-area: entry-mode-copy; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.35; text-overflow: ellipsis; }
+.transaction-entry-method > button.active { border-color: #a998f2; background: #f4f1ff; box-shadow: 0 0 0 2px #7057e812; }
+.transaction-entry-method > button.active > span { background: var(--purple); color: #fff; }
+.transaction-review-fields { min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin: 0; padding: 4px 0 0; border: 0; }
+.transaction-review-fields > .wide, .transaction-review-fields > .type-tabs, .transaction-review-fields > .transaction-form-actions { grid-column: 1 / -1; }
+.transaction-ai-heading span, .transaction-ai-actions > small, .transaction-ai-status, .budget-impact > div strong, .budget-impact > div small, .activity-heading-actions > b, .activity-heading-actions button, .transaction-summary span { font-size: 12px; }
+.transaction-ai-heading p { font-size: 13px; }
+.transaction-list .empty-state { min-height: 250px; padding: 30px 20px; }
+.transaction-list .empty-state span { font-size: 13px; }
+.activity-heading-actions button { min-height: 40px; padding: 8px 0; }
+
+.insights-empty-state { grid-template-columns: minmax(260px, .75fr) minmax(0, 1.25fr); }
+.insights-empty-copy { padding: 24px; border: 1px dashed #ccc5dc; border-radius: 14px; background: #fff; }
+.insights-empty-copy > span { color: var(--purple); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
+.insights-empty-copy > strong { display: block; margin-top: 8px; font-size: 20px; line-height: 1.25; }
+.insights-empty-copy > p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.insights-empty-copy > button { min-height: 44px; margin-top: 15px; padding: 10px 14px; border: 0; border-radius: 10px; background: var(--purple); color: #fff; font-size: 12px; font-weight: 850; }
+
+.settings-save-note { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border-radius: 999px; background: #e7f8f2; color: #117d5e; font-size: 12px; font-weight: 800; white-space: nowrap; }
+
+/* Financial explanations and controls must remain readable without zooming. */
+.capacity-plan-facts span, .budget-month-values span, .scenario-status span, .scenario-result > div:nth-child(2) > span, .scenario-bars span, .scenario-breakdown span, .scenario-breakdown strong, .calculation-tooltip, .calculation-row, .calculation-row > span, .calculation-row b, .calculation-row small, .calculation-row > strong, .calculation-note { font-size: 12px !important; }
+
+@media (max-width: 900px) {
+  .mobile-current-page { max-width: none; overflow: visible; font-size: 12px; text-overflow: clip; }
+  .overview-title h1 { font-size: 39px; }
+  .overview-title p { font-size: 16px; }
+  .overview-plan-anchor, .insights-empty-state { grid-template-columns: 1fr; }
+  .overview-plan-period { padding-top: 18px; padding-left: 0; border-top: 1px solid #d6cef6; border-left: 0; }
+  .transaction-entry-method { grid-template-columns: 1fr; }
+  .transaction-review-fields { grid-template-columns: 1fr; }
+  .transaction-review-fields > * { grid-column: 1 / -1; }
+  .settings-page .page-title.compact { display: flex; align-items: flex-start; }
+  .settings-grid p { font-size: 14px; }
+}
+
+@media (max-width: 520px) {
+  .mobile-current-page { max-width: none; }
+  .overview-plan-anchor { padding: 22px 20px; }
+  .overview-plan-anchor h2 { font-size: 34px; }
+  .transaction-form { padding: 20px; }
+  .transaction-entry-method > button { min-height: 82px; }
+  .transaction-ai-assistant { padding: 15px; }
+  .transaction-list .empty-state { min-height: 210px; }
+  .settings-page .page-title.compact { display: grid; gap: 15px; }
+  .settings-save-note { justify-self: start; }
+  .settings-grid { gap: 10px; }
+  .settings-grid > article { gap: 12px; padding: 16px; border-radius: 14px; }
+  .settings-icon { width: 40px; height: 40px; border-radius: 12px; }
+  .settings-grid p { font-size: 14px; line-height: 1.5; }
+}
