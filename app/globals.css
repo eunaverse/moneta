@@ -3,7 +3,7 @@
 
 :root {
   --ink: #18152b;
-  --muted: #777389;
+  --muted: #716c81;
   --canvas: #f6f5fa;
   --card: #fff;
   --line: #e6e3ed;
@@ -1334,3 +1334,18 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   .settings-icon { width: 28px; height: 28px; }
   .settings-grid p { font-size: 14px; line-height: 1.5; }
 }
+
+/* Prose stays readable while compact labels and financial metadata remain dense. */
+.page-title p,
+.overview-plan-anchor p,
+.setup-guide-intro p,
+.transaction-ai-heading p,
+.preview-empty span,
+.overview-budget-empty span,
+.budget-month-empty span,
+.category-budget-empty span,
+.budget-capacity-section p,
+.settings-grid p,
+.insights-empty-copy > p,
+.insights-preview-heading p,
+.scenario-note { font-size: 16px; line-height: 1.55; }
