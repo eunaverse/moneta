@@ -1,6 +1,7 @@
 export const features = [
   { id: "overview", journey: "See net worth, budget, and recent activity", spec: "tests/e2e/navigation-responsive.spec.ts" },
   { id: "overview-plan-outcome", journey: "See the safe monthly spending outcome before supporting account detail", spec: "tests/e2e/product-usability.spec.ts" },
+  { id: "overview-purpose-hierarchy", journey: "Keep safe monthly spend visually dominant while net worth remains supporting context", spec: "tests/e2e/overview-hierarchy.spec.ts" },
   { id: "overview-budget-language", journey: "Understand category limits and category-counted spending without an unexplained outside-budget total", spec: "tests/e2e/product-usability.spec.ts" },
   { id: "focused-empty-planning", journey: "Start empty planning screens with one useful next action and a concrete preview of future insights", spec: "tests/e2e/product-usability.spec.ts" },
   { id: "first-use-plan-setup", journey: "Understand the minimum setup needed before trusting forecasts", spec: "tests/e2e/design-clarity.spec.ts" },

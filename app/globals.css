@@ -67,10 +67,10 @@ h1, h2, h3 { font-weight: 600; }
 .net-worth-card > strong { display: block; margin: 15px 0 6px; font-size: clamp(38px, 4vw, 60px); letter-spacing: -.05em; }
 .net-worth-card > small { color: #aaa2bd; }
 .asset-snapshot { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
-.asset-snapshot div { padding: 10px; border: 1px solid #4a4066; border-radius: 10px; background: #ffffff09; }
-.asset-snapshot span { display: block; color: #aaa1bd; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
-.asset-snapshot strong { display: block; margin-top: 5px; color: #fff; font-size: 14px; }
-.asset-snapshot small { display: block; margin-top: 5px; color: #bfb6d0; font-size: 11px; }
+.asset-snapshot div { padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #faf9fd; }
+.asset-snapshot span { display: block; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+.asset-snapshot strong { display: block; margin-top: 5px; color: var(--ink); font-size: 14px; }
+.asset-snapshot small { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
 .asset-snapshot .asset-snapshot-empty { grid-column: 1 / -1; }
 .wealth-progress-card { padding: 30px; }
 .wealth-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
@@ -814,24 +814,24 @@ a:focus-visible,
 label.import-button:focus-within { outline: 3px solid #9f8cff; outline-offset: 3px; }
 button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:not(:focus-visible) { outline: none; }
 
-.wealth-overview-card { padding: clamp(24px, 4vw, 42px); border: 1px solid #302754; border-radius: 22px; background: linear-gradient(135deg, #1d1835 0%, #302653 62%, #41306f 100%); color: #fff; box-shadow: 0 20px 50px #17132920; }
+.wealth-overview-card { padding: clamp(24px, 4vw, 34px); border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); box-shadow: none; }
 .wealth-overview-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
-.wealth-overview-heading span { display: block; color: #bcaeff; font-size: 11px; font-weight: 850; letter-spacing: .15em; }
-.wealth-overview-heading strong { display: block; margin-top: 12px; font-size: clamp(42px, 6vw, 72px); letter-spacing: -.055em; }
-.wealth-overview-heading small { display: block; margin-top: 5px; color: #b5acc8; font-size: 13px; }
-.wealth-overview-heading button { min-height: 44px; padding: 10px 15px; border: 1px solid #65568a; border-radius: 10px; background: #ffffff0d; color: #fff; font-size: 12px; font-weight: 750; }
+.wealth-overview-heading span { display: block; color: var(--purple-dark); font-size: 11px; font-weight: 850; letter-spacing: .15em; }
+.wealth-overview-heading strong { display: block; margin-top: 10px; font-size: clamp(28px, 3.2vw, 38px); letter-spacing: -.045em; }
+.wealth-overview-heading small { display: block; margin-top: 5px; color: var(--muted); font-size: 13px; }
+.wealth-overview-heading button { min-height: 44px; padding: 10px 15px; border: 1px solid var(--line); border-radius: 10px; background: #faf9fd; color: var(--purple-dark); font-size: 12px; font-weight: 750; }
 .exchange-rate-warning { width: 100%; margin-top: 18px; padding: 11px 13px; border: 1px solid #f2c26b; border-radius: 10px; background: #fff5d6; color: #7f5c00; text-align: left; font-size: 12px; font-weight: 800; }
-.wealth-overview-card .wealth-track { margin-top: 34px; background: #f26b4f; }
-.wealth-overview-card .wealth-track > i { background: linear-gradient(90deg, #8c74f2, #b399ff); }
+.wealth-overview-card .wealth-track { margin-top: 26px; background: #ebe7f4; }
+.wealth-overview-card .wealth-track > i { background: #8c78df; }
 .wealth-overview-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; }
 .wealth-overview-values > div { min-width: 0; }
-.wealth-overview-values span { display: block; color: #b8afca; font-size: 12px; }
+.wealth-overview-values span { display: block; color: var(--muted); font-size: 12px; }
 .wealth-overview-values strong { display: block; margin-top: 6px; overflow: hidden; font-size: clamp(16px, 2vw, 23px); text-overflow: ellipsis; white-space: nowrap; }
-.wealth-details { margin-top: 24px; border-top: 1px solid #ffffff22; }
-.wealth-details summary { min-height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 10px 0; color: #d9d2e8; cursor: pointer; font-size: 12px; font-weight: 750; list-style: none; }
+.wealth-details { margin-top: 24px; border-top: 1px solid var(--line); }
+.wealth-details summary { min-height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 10px 0; color: var(--ink); cursor: pointer; font-size: 12px; font-weight: 750; list-style: none; }
 .wealth-details summary::-webkit-details-marker { display: none; }
 .wealth-details[open] summary span { transform: rotate(180deg); }
-.wealth-details > div > p { margin: 4px 0 0; color: #aaa1bd; font-size: 12px; }
+.wealth-details > div > p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .wealth-details .asset-snapshot { margin-top: 14px; }
 
 .budget-capacity-section { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 24px; margin-bottom: 18px; padding: 28px; border-radius: 18px; background: linear-gradient(135deg, #211a3b, #4b36b8); color: #fff; }
@@ -1145,11 +1145,11 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 }
 
 /* Calmer surfaces keep attention on financial decisions rather than decoration. */
-.wealth-overview-card { background: #25203e; box-shadow: 0 14px 34px #17132918; }
-.wealth-overview-card .wealth-track > i { background: #9a86ee; }
+.wealth-overview-card { background: #fff; box-shadow: none; }
+.wealth-overview-card .wealth-track > i { background: #8c78df; }
 .budget-capacity-section { background: #302852; }
 .scenario-result { background: #25203e; }
-.settings-grid > article.settings-account { background: #faf9fd; }
+.settings-surface-grid > article.settings-account { background: #faf9fd; }
 .auth-shell { background: #f4f3f8; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1203,7 +1203,7 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .overview-title > div { max-width: 780px; }
 .overview-title h1 { font-size: clamp(42px, 4.6vw, 62px); }
 .overview-title p { max-width: 700px; font-size: 15px; line-height: 1.55; }
-.overview-plan-anchor { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 28px; margin-bottom: 20px; padding: 28px 30px; border: 1px solid #cbc0fa; border-left: 5px solid var(--purple); border-radius: 20px; background: linear-gradient(135deg, #eee9ff, #faf9ff 65%, #fff); }
+.overview-plan-anchor { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 28px; margin-bottom: 20px; padding: 28px 30px; border: 2px solid #bfb1f4; border-radius: 16px; background: linear-gradient(135deg, #eee9ff, #faf9ff 65%, #fff); box-shadow: 0 14px 32px #5c43c212; }
 .overview-plan-anchor > div:first-child > span, .overview-plan-period > span { color: var(--purple-dark); font-size: 12px; font-weight: 900; letter-spacing: .12em; }
 .overview-plan-anchor h2 { margin: 9px 0 0; font-size: clamp(32px, 4.3vw, 54px); line-height: 1; letter-spacing: -.045em; }
 .overview-plan-anchor p { max-width: 700px; margin: 10px 0 0; color: #635d72; font-size: 14px; line-height: 1.5; }
@@ -1211,7 +1211,7 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .overview-plan-period > span, .overview-plan-period > strong { display: block; }
 .overview-plan-period > strong { margin-top: 8px; font-size: 18px; }
 .overview-plan-period > button { min-height: 44px; margin-top: 12px; padding: 10px 0; border: 0; background: transparent; color: var(--purple-dark); font-size: 12px; font-weight: 850; }
-.overview-plan-anchor.empty { border-color: #d8d4e2; border-left-color: #aaa3b8; background: #fff; }
+.overview-plan-anchor.empty { border-color: #d8d4e2; background: #fff; }
 .overview-plan-anchor.empty h2 { color: #4f495d; }
 .overview-plan-anchor.empty .overview-plan-period { border-left-color: var(--line); }
 .wealth-overview-card.empty .wealth-track { background: #48415f; }
