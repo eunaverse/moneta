@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@fontsource-variable/manrope";
 
 :root {
   --ink: #18152b;
@@ -18,9 +19,10 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: auto; }
-body { margin: 0; background: var(--canvas); color: var(--ink); font-family: Inter, "Helvetica Neue", Arial, sans-serif; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font-family: "Manrope Variable", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; font-variant-numeric: tabular-nums; font-synthesis: none; text-rendering: optimizeLegibility; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
+h1, h2, h3 { font-weight: 600; }
 .app-shell { min-height: 100vh; }
 
 .sidebar { position: fixed; inset: 0 auto 0 0; width: 244px; padding: 28px 20px; background: #171329; color: #fff; display: flex; flex-direction: column; z-index: 5; }
@@ -47,7 +49,7 @@ button { cursor: pointer; }
 .page-title h1 { margin: 12px 0 0; font-size: clamp(42px, 5vw, 70px); line-height: 1.02; letter-spacing: -.055em; }
 .page-title h1 em { color: var(--purple); font-family: Georgia, serif; font-weight: 400; }
 .page-title.compact h1 { font-size: 48px; }
-.page-title p { max-inline-size: var(--measure-page-copy); margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+.page-title p { max-inline-size: var(--measure-page-copy); margin: 10px 0 0; color: var(--muted); font-size: 16px; line-height: 1.55; }
 
 /* Keep headings and supporting copy on deliberate reading measures at every width. */
 .page-title h1, .setup-guide-intro h2, .card-heading h2, .insights-empty-copy > strong, .insights-preview-heading h2, .insights-preview-trend strong, .insights-preview-signals strong, .settings-grid h2 { text-wrap: balance; }

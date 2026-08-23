@@ -19,6 +19,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .gstack --ignore-pattern .codex-conflict-worktrees --ignore-pattern work"
   },
   "dependencies": {
+    "@fontsource-variable/manrope": "5.3.0",
     "@supabase/supabase-js": "^2.112.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
