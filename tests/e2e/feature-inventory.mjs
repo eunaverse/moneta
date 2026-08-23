@@ -18,6 +18,8 @@ export const features = [
   { id: "transaction-detail", journey: "Open a saved transaction to read aligned receipt allocations, category totals, total reconciliation, and a legacy single-category fallback", spec: "tests/e2e/transaction-detail.spec.ts" },
   { id: "transaction-entry-method", journey: "Choose AI-assisted or manual entry and understand whether an expense reduces category limits", spec: "tests/e2e/product-usability.spec.ts" },
   { id: "transaction-filter-delete-undo", journey: "Filter, delete, and undo activity", spec: "tests/e2e/transactions.spec.ts" },
+  { id: "automatic-budget-category", journey: "Add newly spent categories to Budget without inventing a monthly limit", spec: "tests/e2e/direct-item-actions.spec.ts" },
+  { id: "direct-list-item-actions", journey: "Right-click or long-press a list item to delete it directly with Undo", spec: "tests/e2e/direct-item-actions.spec.ts" },
   { id: "ai-transaction-description", journey: "Turn a natural-language purchase description into a reviewable transaction draft", spec: "tests/e2e/ai-transaction-entry.spec.ts" },
   { id: "ai-transaction-image", journey: "Turn a payment screenshot or receipt image into a reviewable transaction draft", spec: "tests/e2e/ai-transaction-entry.spec.ts" },
   { id: "ai-receipt-category-split", journey: "Review item-level categories whose amounts reconcile to one receipt transaction", spec: "tests/e2e/ai-transaction-entry.spec.ts" },

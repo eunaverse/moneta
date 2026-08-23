@@ -11,9 +11,9 @@ test("empty account explains the setup path before presenting projections", asyn
   await expect(setupGuide).toContainText("Add scheduled payments");
   await expect(setupGuide).toContainText("Record a transaction");
 
-  await expect(page.getByRole("heading", { name: "This month's category budgets" })).toBeVisible();
   await expect(page.locator(".overview-plan-anchor")).toContainText("SAFE MONTHLY SPEND");
-  await expect(page.locator(".overview-budget-card")).toContainText("No category budget yet");
+  await expect(page.getByRole("button", { name: "Edit assets" })).toBeVisible();
+  await expect(page.locator(".wealth-overview-card, .overview-budget-card")).toHaveCount(0);
 });
 
 test("planning terms stay distinct and no-data insights remain neutral", async ({ page }) => {
@@ -59,8 +59,8 @@ test("key financial labels meet the desktop readability floor", async ({ page },
   for (const selector of [
     ".overview-plan-anchor > div:first-child > span",
     ".overview-plan-anchor p",
-    ".wealth-overview-values span",
-    ".overview-budget-empty span",
+    ".setup-guide-intro > span",
+    ".preview-empty span",
   ]) {
     const fontSize = await page.locator(selector).first().evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
     expect(fontSize, selector).toBeGreaterThanOrEqual(12);

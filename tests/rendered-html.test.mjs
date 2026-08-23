@@ -114,6 +114,10 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /className="selection-delete"/);
   assert.match(page, /<svg aria-hidden="true" viewBox="0 0 24 24">/);
   assert.match(css, /\.selection-delete svg/);
+  assert.match(page, /openItemActions/);
+  assert.match(page, /beginItemLongPress/);
+  assert.match(page, /Delete \{itemActions\.noun\}/);
+  assert.match(css, /\.item-context-menu/);
   assert.match(page, /function LoadMore/);
   assert.match(page, /Load more/);
   assert.match(css, /\.load-more/);
@@ -175,7 +179,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(css, /\.budget-category-row > \* \{ min-width: 0; \}/);
   assert.match(css, /container-type: inline-size/);
   assert.match(css, /@container \(max-width: 560px\)/);
-  assert.match(css, /grid-template-areas: "category balance" "track track" "amount amount"/);
+  assert.match(css, /grid-template-areas: "category balance more" "track track more" "amount amount more"/);
   assert.match(css, /\.budget-mix-layout \{ min-width: 0; max-width: 100%;/);
   assert.doesNotMatch(page, /<div><span>BUDGET<\/span><strong>\{usd\.format\(monthlyBudgets/);
   assert.doesNotMatch(page, /FUTURE PLANNED PAYMENTS/);
