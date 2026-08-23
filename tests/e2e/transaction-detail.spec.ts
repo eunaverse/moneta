@@ -189,11 +189,10 @@ test("opens a legacy single-category transaction from recent activity and enters
   await expect(page.locator(".transaction-form").getByLabel("Description")).toHaveValue("Groceries");
 });
 
-test("keeps detail opening separate from transaction selection", async ({ page }) => {
+test("opens item actions without accidentally opening transaction detail", async ({ page }) => {
   await saveManualTransaction(page);
-  await page.locator(".transaction-list").getByRole("button", { name: "Select" }).click();
+  await page.getByRole("button", { name: "View details for Groceries" }).click({ button: "right" });
 
-  await expect(page.getByRole("checkbox", { name: "Select Groceries" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "View details for Groceries" })).toBeDisabled();
+  await expect(page.getByRole("menu", { name: "Actions for Groceries" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Groceries" })).toHaveCount(0);
 });

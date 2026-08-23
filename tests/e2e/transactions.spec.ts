@@ -23,10 +23,8 @@ test("creates, edits, filters, deletes, and restores a transaction", async ({ pa
   await page.locator(".transaction-filter-bar").getByLabel("BUDGET").selectOption("outside");
   await expect(page.getByText("No matching transactions")).toBeVisible();
   await page.getByRole("button", { name: "Clear" }).click();
-  await page.locator(".transaction-history-list").getByRole("button", { name: "Select" }).click();
-  await page.getByRole("checkbox", { name: "Select Weekly groceries" }).check();
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: /Delete transactions/ }).click();
+  await page.getByRole("button", { name: "View details for Weekly groceries" }).click({ button: "right" });
+  await page.getByRole("menu", { name: "Actions for Weekly groceries" }).getByRole("menuitem", { name: "Delete transaction" }).click();
   await expect(page.getByText("No matching transactions")).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByText("Weekly groceries", { exact: true })).toBeVisible();

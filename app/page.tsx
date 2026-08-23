@@ -15,6 +15,14 @@ type FixedCostFilter = "all" | "monthly" | "one-time";
 type TransactionTypeFilter = "all" | "income" | "expense";
 type TransactionBudgetFilter = "all" | "monthly" | "outside";
 type SelectionScope = "budgets" | "fixed-costs" | "transactions" | "categories";
+type ItemActionState = {
+  scope: SelectionScope;
+  id: string;
+  label: string;
+  noun: string;
+  left: number;
+  top: number;
+};
 type SyncStatus = "loading" | "migration" | "saving" | "saved" | "error";
 type TransactionAiStatus = "idle" | "loading" | "success" | "error";
 type Locale = "en" | "ko";
@@ -251,6 +259,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const [transactionDetailEntryId, setTransactionDetailEntryId] = useState<string | null>(null);
   const [selectionScope, setSelectionScope] = useState<SelectionScope | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [itemActions, setItemActions] = useState<ItemActionState | null>(null);
   const [overviewTransactionLimit, setOverviewTransactionLimit] = useState(3);
   const [activityLimit, setActivityLimit] = useState(4);
   const [transactionLimit, setTransactionLimit] = useState(8);
@@ -279,6 +288,11 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const transactionDetailDialogRef = useRef<HTMLElement>(null);
   const transactionDetailCloseRef = useRef<HTMLButtonElement>(null);
   const transactionDetailOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const itemActionMenuRef = useRef<HTMLDivElement>(null);
+  const itemActionTriggerRef = useRef<HTMLElement | null>(null);
+  const itemLongPressTimerRef = useRef(0);
+  const itemLongPressOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressNextItemClickRef = useRef(false);
 
   useEffect(() => {
     const savedLocale = window.localStorage.getItem("moneta-locale");
@@ -471,6 +485,23 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     const timer = window.setTimeout(() => setUndoAction(null), 10000);
     return () => window.clearTimeout(timer);
   }, [undoAction]);
+  useEffect(() => {
+    if (!itemActions) return;
+    const focusFrame = window.requestAnimationFrame(() => itemActionMenuRef.current?.querySelector<HTMLButtonElement>("button")?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setItemActions(null);
+      const trigger = itemActionTriggerRef.current;
+      itemActionTriggerRef.current = null;
+      if (trigger) window.requestAnimationFrame(() => trigger.focus());
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [itemActions]);
+  useEffect(() => () => window.clearTimeout(itemLongPressTimerRef.current), []);
   useEffect(() => {
     if (!loaded || !cloudReady) return;
     let cancelled = false;
@@ -682,11 +713,11 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const monthEntries = entries.filter((entry) => entry.date.startsWith(selectedMonth)).sort((a, b) => b.date.localeCompare(a.date));
   const monthlyIncomeTotal = monthEntries.filter((entry) => entry.type === "income").reduce((sum, entry) => sum + toDisplay(entry), 0);
   const monthlyExpenseTotal = monthEntries.filter((entry) => entry.type === "expense").reduce((sum, entry) => sum + toDisplay(entry), 0);
-  const monthlyBudgetExpenseTotal = monthEntries.filter((entry) => entry.type === "expense" && entry.countsTowardMonthlyBudget !== false).reduce((sum, entry) => sum + toDisplay(entry), 0);
   const activeBudgetCategories = budgetCategories.filter((category) => expenseCategories.includes(category));
   const availableBudgetCategories = expenseCategories.filter((category) => !activeBudgetCategories.includes(category));
   const monthlyBudgetTotal = activeBudgetCategories.reduce((sum, category) => sum + (monthlyBudgets[category] || 0), 0);
-  const hasCategoryBudgetData = activeBudgetCategories.length > 0 || monthlyBudgetExpenseTotal > 0;
+  const hasCategoryBudgetData = activeBudgetCategories.length > 0;
+  const hasCategoryBudgetLimits = monthlyBudgetTotal > 0;
   const forecastStartMonth = monthIndex(currentMonth) > monthIndex(data.planningStartMonth) ? currentMonth : data.planningStartMonth;
   const planningCapacity = calculatePlanningCapacity({ currentNetWorth: result.total, recurringExpenses, reservationStartMonth: data.planningStartMonth, startMonth: forecastStartMonth, endMonth: data.planningEndMonth });
   const remainingPlanningMonths = planningCapacity.remainingMonths;
@@ -703,8 +734,11 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const scheduledItems = recurringExpenses.filter((item) => isDueInMonth(item, selectedMonth) && !isPaidInMonth(item, selectedMonth));
   const scheduledThisMonthTotal = scheduledItems.reduce((sum, item) => sum + item.amount, 0);
   const monthlyFlexibleBudgetForSelectedMonth = monthlyBudgetTotal;
-  const budgetAvailable = monthlyBudgetTotal - monthlyBudgetExpenseTotal;
   const spentByCategory = Object.fromEntries(expenseCategories.map((category) => [category, monthEntries.filter((entry) => entry.type === "expense" && entry.countsTowardMonthlyBudget !== false).reduce((sum, entry) => sum + categoryAmountInDisplayCurrency(entry, category), 0)])) as Record<string, number>;
+  const monthlyBudgetExpenseTotal = activeBudgetCategories.filter((category) => (monthlyBudgets[category] || 0) > 0).reduce((sum, category) => sum + (spentByCategory[category] || 0), 0);
+  const monthlyUnbudgetedExpenseTotal = activeBudgetCategories.filter((category) => (monthlyBudgets[category] || 0) <= 0).reduce((sum, category) => sum + (spentByCategory[category] || 0), 0);
+  const categoriesNeedingLimits = activeBudgetCategories.filter((category) => (monthlyBudgets[category] || 0) <= 0);
+  const budgetAvailable = monthlyBudgetTotal - monthlyBudgetExpenseTotal;
   const displayedBudgetCategories = [...activeBudgetCategories].sort((first, second) => {
     const originalOrder = activeBudgetCategories.indexOf(first) - activeBudgetCategories.indexOf(second);
     if (categorySort === "budget-desc") return (monthlyBudgets[second] || 0) - (monthlyBudgets[first] || 0) || originalOrder;
@@ -935,6 +969,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     const previousEntry = editingEntryId ? entries.find((entry) => entry.id === editingEntryId) : undefined;
     const previousEntries = entries;
     const previousSchedule = recurringExpenses;
+    const previousMonthlyBudgets = monthlyBudgets;
+    const previousBudgetCategories = budgetCategories;
     const id = previousEntry?.id || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`);
     const [plannedExpenseId, plannedExpenseMonth] = draft.plannedPaymentKey.split("::");
     if (draft.linksPlannedPayment && (!plannedExpenseId || !plannedExpenseMonth)) return;
@@ -952,6 +988,9 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       plannedExpenseMonth: draft.type === "expense" && draft.linksPlannedPayment && plannedExpenseMonth ? plannedExpenseMonth : undefined,
       receiptId: draft.type === "expense" ? previousEntry?.receiptId : undefined,
     };
+    const autoAddedBudgetCategories = entry.type === "expense" && entry.countsTowardMonthlyBudget !== false
+      ? entryCategoryNames(entry).filter((category) => expenseCategories.includes(category) && !budgetCategories.includes(category))
+      : [];
     if (draft.type === "expense" && receiptFile) {
       try {
         entry.receiptId = await uploadReceipt(account.session.user.id, id, receiptFile, previousEntry?.receiptId);
@@ -969,6 +1008,14 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       }));
     }
     setEntries((current) => previousEntry ? current.map((item) => item.id === previousEntry.id ? entry : item) : [entry, ...current]);
+    if (autoAddedBudgetCategories.length > 0) {
+      setBudgetCategories((current) => [...current, ...autoAddedBudgetCategories.filter((category) => !current.includes(category))]);
+      setMonthlyBudgets((current) => {
+        const next = { ...current };
+        autoAddedBudgetCategories.forEach((category) => { if (!(category in next)) next[category] = 0; });
+        return next;
+      });
+    }
     setSelectedMonth(entry.date.slice(0, 7));
     setDraft((current) => ({ ...current, description: "", amount: 0, allocations: [], linksPlannedPayment: false, plannedPaymentKey: "" }));
     setTransactionAiDescription("");
@@ -981,8 +1028,13 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     setReceiptFile(null);
     setReceiptInputKey((current) => current + 1);
     setUndoAction({
-      message: previousEntry ? "Transaction updated." : "Transaction added.",
-      restore: () => { setEntries(previousEntries); setRecurringExpenses(previousSchedule); },
+      message: `${previousEntry ? "Transaction updated" : "Transaction added"}.${autoAddedBudgetCategories.length > 0 ? ` ${autoAddedBudgetCategories.join(" · ")} added to Budget.` : ""}`,
+      restore: () => {
+        setEntries(previousEntries);
+        setRecurringExpenses(previousSchedule);
+        setMonthlyBudgets(previousMonthlyBudgets);
+        setBudgetCategories(previousBudgetCategories);
+      },
     });
   };
   const chooseReceipt = (file?: File) => {
@@ -1046,16 +1098,63 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     }
   };
   const toggleSelectedItem = (item: string) => setSelectedItems((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item]);
-  const deleteSelectedItems = (scope: SelectionScope) => {
-    const selected = selectedItems;
-    if (selectionScope !== scope || selected.length === 0) return;
+  const closeItemActions = (restoreFocus = true) => {
+    setItemActions(null);
+    window.clearTimeout(itemLongPressTimerRef.current);
+    itemLongPressOriginRef.current = null;
+    suppressNextItemClickRef.current = false;
+    if (restoreFocus && itemActionTriggerRef.current) {
+      const trigger = itemActionTriggerRef.current;
+      window.requestAnimationFrame(() => trigger.focus());
+    }
+    itemActionTriggerRef.current = null;
+  };
+  const openItemActions = (scope: SelectionScope, id: string, label: string, noun: string, clientX: number, clientY: number, trigger: HTMLElement) => {
+    const menuWidth = 224;
+    const menuHeight = 150;
+    itemActionTriggerRef.current = trigger;
+    setItemActions({
+      scope,
+      id,
+      label,
+      noun,
+      left: Math.max(12, Math.min(clientX, window.innerWidth - menuWidth - 12)),
+      top: Math.max(12, Math.min(clientY, window.innerHeight - menuHeight - 12)),
+    });
+  };
+  const handleItemContextMenu = (event: React.MouseEvent<HTMLElement>, scope: SelectionScope, id: string, label: string, noun: string) => {
+    event.preventDefault();
+    openItemActions(scope, id, label, noun, event.clientX, event.clientY, event.currentTarget);
+  };
+  const beginItemLongPress = (event: React.PointerEvent<HTMLElement>, scope: SelectionScope, id: string, label: string, noun: string) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    window.clearTimeout(itemLongPressTimerRef.current);
+    itemLongPressOriginRef.current = { x: event.clientX, y: event.clientY };
+    const trigger = event.currentTarget;
+    itemLongPressTimerRef.current = window.setTimeout(() => {
+      suppressNextItemClickRef.current = true;
+      openItemActions(scope, id, label, noun, event.clientX, event.clientY, trigger);
+    }, 550);
+  };
+  const moveItemLongPress = (event: React.PointerEvent<HTMLElement>) => {
+    const origin = itemLongPressOriginRef.current;
+    if (!origin || Math.hypot(event.clientX - origin.x, event.clientY - origin.y) < 10) return;
+    window.clearTimeout(itemLongPressTimerRef.current);
+    itemLongPressOriginRef.current = null;
+  };
+  const endItemLongPress = () => {
+    window.clearTimeout(itemLongPressTimerRef.current);
+    itemLongPressOriginRef.current = null;
+  };
+  const deleteItems = (scope: SelectionScope, selected: string[], confirmDelete: boolean) => {
+    if (selected.length === 0) return;
     if (scope === "categories" && expenseCategories.length - selected.length < 1) {
       window.alert("Keep at least one category.");
       return;
     }
     const scopeLabel = scope === "budgets" ? "selected budgets" : scope === "fixed-costs" ? "selected fixed costs" : scope === "transactions" ? "selected transactions" : "selected categories";
     const categoryRecordsWillMove = scope === "categories" && (recurringExpenses.some((item) => selected.includes(item.category)) || entries.some((entry) => entry.type === "expense" && entryCategoryNames(entry).some((category) => selected.includes(category))));
-    if (!window.confirm(`Delete ${selected.length} ${scopeLabel}?${categoryRecordsWillMove ? " Existing records will move to a remaining category." : ""}`)) return;
+    if (confirmDelete && !window.confirm(`Delete ${selected.length} ${scopeLabel}?${categoryRecordsWillMove ? " Existing records will move to a remaining category." : ""}`)) return;
     const snapshot = {
       entries,
       recurringExpenses,
@@ -1063,8 +1162,9 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       monthlyBudgets,
       budgetCategories,
     };
+    const singularLabel = scope === "budgets" ? "Budget" : scope === "fixed-costs" ? "Scheduled payment" : scope === "transactions" ? "Transaction" : "Category";
     setUndoAction({
-      message: `${selected.length} ${scopeLabel} deleted.`,
+      message: selected.length === 1 ? `${singularLabel} deleted.` : `${selected.length} ${scopeLabel} deleted.`,
       restore: () => {
         setEntries(snapshot.entries);
         setRecurringExpenses(snapshot.recurringExpenses);
@@ -1113,6 +1213,16 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       setRecurringDraft((current) => selected.includes(current.category) ? { ...current, category: replacement } : current);
     }
     cancelSelection();
+  };
+  const deleteSelectedItems = (scope: SelectionScope) => {
+    if (selectionScope !== scope) return;
+    deleteItems(scope, selectedItems, true);
+  };
+  const deleteContextItem = () => {
+    if (!itemActions) return;
+    const { scope, id } = itemActions;
+    closeItemActions(false);
+    deleteItems(scope, [id], scope === "categories");
   };
   const addCategory = (event: React.FormEvent) => {
     event.preventDefault();
@@ -1323,13 +1433,13 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     const categoryLabel = entryCategoryNames(entry).join(" · ");
     return <div className={`transaction-row ${selecting ? "selecting" : ""}`} key={entry.id}>
       {selecting && <label className="row-check"><input type="checkbox" checked={selectedItems.includes(entry.id)} onChange={() => toggleSelectedItem(entry.id)} /><span aria-hidden="true">✓</span><b className="sr-only">Select {entry.description}</b></label>}
-      <button type="button" className="transaction-row-open" aria-label={`View details for ${entry.description}`} disabled={selecting} onClick={(event) => openTransactionDetail(entry, event.currentTarget)}>
+      <button type="button" className="transaction-row-open" aria-label={`View details for ${entry.description}`} disabled={selecting} onContextMenu={(event) => handleItemContextMenu(event, "transactions", entry.id, entry.description, "transaction")} onPointerDown={(event) => beginItemLongPress(event, "transactions", entry.id, entry.description, "transaction")} onPointerMove={moveItemLongPress} onPointerUp={endItemLongPress} onPointerCancel={endItemLongPress} onPointerLeave={endItemLongPress} onClick={(event) => { if (suppressNextItemClickRef.current) { suppressNextItemClickRef.current = false; return; } openTransactionDetail(entry, event.currentTarget); }}>
         <i className={entry.type}>{categoryLabel[0]}</i>
         <span className="transaction-entry-copy"><strong title={entry.description}>{entry.description}</strong><span title={`${entry.date.slice(5).replace("-", "/")} · ${categoryLabel}`}>{entry.date.slice(5).replace("-", "/")} · {categoryLabel}{entry.receiptId ? " · Receipt" : ""}{entry.plannedExpenseMonth ? ` · Plan ${entry.plannedExpenseMonth} paid` : ""}</span>{entry.type === "expense" && <small className={entry.countsTowardMonthlyBudget !== false ? "budget-status included" : "budget-status excluded"}>{entry.countsTowardMonthlyBudget !== false ? "Monthly budget" : "Outside budget"}</small>}</span>
         <b className={`transaction-amount ${entry.type}`}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b>
       </button>
       {receiptUrls[entry.id] ? <button type="button" className="receipt-thumb" aria-label={`View receipt for ${entry.description}`} onClick={() => setActiveReceiptUrl(receiptUrls[entry.id])}><img src={receiptUrls[entry.id]} alt="" /></button> : <span className="receipt-placeholder" />}
-      <div className="row-actions"><button type="button" className="row-edit" aria-label={`Edit ${entry.description}`} onClick={() => editEntry(entry)}>Edit</button></div>
+      <div className="row-actions"><button type="button" className="row-edit" aria-label={`Edit ${entry.description}`} onClick={() => editEntry(entry)}>Edit</button><button type="button" className="row-more" aria-label={`More actions for ${entry.description}`} aria-haspopup="menu" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openItemActions("transactions", entry.id, entry.description, "transaction", rect.right, rect.bottom, event.currentTarget); }}>⋯</button></div>
     </div>;
   };
   const syncLabel = syncStatus === "loading" ? "Loading account" : syncStatus === "migration" ? "Move device data" : syncStatus === "saving" ? "Syncing changes" : syncStatus === "error" ? "Sync needs attention" : "Synced to account";
@@ -1372,25 +1482,25 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
         {syncStatus === "saved" && syncMessage && <div className="sync-note" role="status">{syncMessage}<button type="button" aria-label="Dismiss" onClick={() => setSyncMessage("")}>×</button></div>}
 
         {view === "overview" && <div className="page overview-page">
-          <div className="page-title overview-title"><div><span>{locale === "ko" ? "재정 요약" : "YOUR PLAN"}</span><h1>{locale === "ko" ? "내 돈을 계획한 날짜까지." : "Make your money last."}</h1><p>{locale === "ko" ? `현재 자산과 예정된 지출을 바탕으로 ${planningEndLabel}까지 안전하게 쓸 수 있는 금액을 확인하세요.` : `Turn your current balance and planned bills into a monthly amount that lasts through ${planningEndLabel}.`}</p></div><button className="primary-action" onClick={goToAddTransaction}>{locale === "ko" ? "거래 추가" : "Add transaction"} <b>＋</b></button></div>
+          <div className="page-title overview-title"><div><span>{locale === "ko" ? "재정 요약" : "YOUR PLAN"}</span><h1>{locale === "ko" ? "내 돈을 계획한 날짜까지." : "Make your money last."}</h1><p>{locale === "ko" ? `현재 자산과 예정된 지출을 바탕으로 ${planningEndLabel}까지 안전하게 쓸 수 있는 금액을 확인하세요.` : `Turn your current balance and planned bills into a monthly amount that lasts through ${planningEndLabel}.`}</p></div>{!isPlanUnconfigured && <button className="primary-action" onClick={goToAddTransaction}>{locale === "ko" ? "거래 추가" : "Add transaction"} <b>＋</b></button>}</div>
           <section className={`overview-plan-anchor ${isPlanUnconfigured ? "empty" : ""}`} aria-labelledby="overview-plan-anchor-title">
             <div><span>SAFE MONTHLY SPEND</span><h2 id="overview-plan-anchor-title">{isPlanUnconfigured ? "Add money to calculate" : money.format(monthlyLivingMoneyAvailable)}</h2><p>{isPlanUnconfigured ? "Start with the balances you have now. Moneta will reserve planned bills before calculating this amount." : `Available each month after unpaid scheduled payments through ${planningEndLabel}.`}</p></div>
-            <div className="overview-plan-period"><span>PLAN THROUGH</span><strong>{planningEndLabel}</strong><button type="button" onClick={isPlanUnconfigured ? openAssetEditor : () => navigate("budget")}>{isPlanUnconfigured ? "Add assets & income" : "Review plan"} →</button></div>
+            <div className="overview-plan-period"><span>PLAN THROUGH</span><strong>{planningEndLabel}</strong><button type="button" aria-label={isPlanUnconfigured ? "Edit assets" : "Review plan"} onClick={isPlanUnconfigured ? openAssetEditor : () => navigate("budget")}>{isPlanUnconfigured ? "Add assets & income" : "Review plan"} →</button></div>
           </section>
           {isPlanUnconfigured && <section className="setup-guide" aria-labelledby="setup-guide-title"><div className="setup-guide-intro"><span>START HERE</span><h2 id="setup-guide-title">Set up a trustworthy plan</h2><p>Complete these basics before relying on forecasts or spending guidance.</p></div><ol><li><button type="button" onClick={openAssetEditor}><b>1</b><span><strong>Add assets &amp; income</strong><small>Tell Moneta what money you have now.</small></span><i>→</i></button></li><li><button type="button" onClick={() => navigate("settings")}><b>2</b><span><strong>Review plan dates</strong><small>Choose how long this money should last.</small></span><i>→</i></button></li><li><button type="button" onClick={() => navigate("fixed-costs")}><b>3</b><span><strong>Add scheduled payments</strong><small>Reserve rent, tuition, and one-time costs.</small></span><i>→</i></button></li><li><button type="button" onClick={goToAddTransaction}><b>4</b><span><strong>Record a transaction</strong><small>Keep actual spending separate from plans.</small></span><i>→</i></button></li></ol></section>}
-          <article className={`wealth-overview-card ${totalMoneyAvailable <= 0 ? "empty" : ""}`}>
+          {!isPlanUnconfigured && <article className={`wealth-overview-card ${totalMoneyAvailable <= 0 ? "empty" : ""}`}>
             <div className="wealth-overview-heading"><div><span>CURRENT NET WORTH</span><strong>{money.format(result.total)}</strong><small>{data.assets.length} {data.assets.length === 1 ? "asset" : "assets"} · displayed in {data.displayCurrency}</small></div><button onClick={openAssetEditor}>Edit assets</button></div>
             {missingExchangeRateCurrencies.length > 0 && <button type="button" className="exchange-rate-warning" onClick={openAssetEditor}>Add exchange rates for {missingExchangeRateCurrencies.join(", ")} before trusting totals.</button>}
             <div className={`wealth-track ${totalMoneyAvailable <= 0 ? "empty" : ""}`} aria-label={totalMoneyAvailable <= 0 ? "Add assets to calculate how much money remains" : `${Math.round(wealthRemainingPercent)} percent of total money remains`}><i style={{ width: `${wealthRemainingPercent}%` }} /></div>
             <div className="wealth-overview-values"><div><span>Remaining</span><strong>{money.format(result.total)}</strong></div><div><span>Spent</span><strong>{money.format(allTimeExpense)}</strong></div><div><span>Total</span><strong>{money.format(totalMoneyAvailable)}</strong></div></div>
             <details className="wealth-details"><summary>Accounts & calculation <span>⌄</span></summary><div><p>Starting assets + recorded income − actual expenses</p><div className="asset-snapshot">{data.assets.length === 0 ? <div className="asset-snapshot-empty"><span>NO ASSETS YET</span><strong>Add only the balances you actually have.</strong></div> : data.assets.map((asset) => { const converted = toDisplayAmount(asset.amount, asset.currency, data.displayCurrency, data.exchangeRates); return <div key={asset.id}><span>{asset.name}</span><strong>{formatOriginalCurrency(asset.amount, asset.currency)}</strong>{asset.currency !== data.displayCurrency && <small>{converted === null ? "Exchange rate needed" : money.format(converted)}</small>}</div>; })}</div></div></details>
-          </article>
+          </article>}
           {overdueScheduledPayments.length > 0 && <div className="scheduled-strip overview-scheduled overdue-scheduled" role="status"><div><span>OVERDUE THROUGH {addMonths(currentMonth, -1)}</span><strong title={overdueScheduledNames.join(" · ")}>{overdueScheduledSummary}</strong></div><b>{money.format(overdueScheduledTotal)}</b><small>{overdueScheduledCount} unpaid {overdueScheduledCount === 1 ? "payment remains" : "payments remain"} reserved until linked to a transaction.</small></div>}
           {currentScheduledItems.length > 0 && <div className="scheduled-strip overview-scheduled"><div><span>DUE THIS MONTH · {currentMonth}</span><strong title={currentScheduledItems.map((item) => item.name).join(" · ")}>{summarizeSchedule(currentScheduledItems)}</strong></div><b>{money.format(currentScheduledTotal)}</b><small>Reserved already · link this schedule when recording the payment.</small></div>}
-          <article className={`month-card overview-budget-card ${!hasCategoryBudgetData ? "empty" : ""}`}><div className="card-heading"><div><span>{selectedMonth}</span><h2>This month&apos;s category budgets</h2></div><button onClick={() => navigate("budget")}>{hasCategoryBudgetData ? "Edit budgets" : "Add budget"}</button></div>{!hasCategoryBudgetData ? <div className="overview-budget-empty"><strong>No category budget yet</strong><span>Add limits for categories such as Food or Transport when you are ready to track monthly spending.</span></div> : <><div className="budget-remaining"><span>CATEGORY BUDGET REMAINING</span><strong className={budgetAvailable < 0 ? "danger-text" : "success-text"}>{money.format(budgetAvailable)}</strong></div>{monthlyBudgetAbovePlanSafe > 0 && <p className="plan-budget-warning" role="status">Your category budget is {money.format(monthlyBudgetAbovePlanSafe)}/month above the safe monthly spend.</p>}<div className="stacked-track"><i className="actual" style={{ width: `${Math.min(100, monthlyFlexibleBudgetForSelectedMonth > 0 ? monthlyBudgetExpenseTotal / monthlyFlexibleBudgetForSelectedMonth * 100 : 0)}%` }} /></div><div className="budget-breakdown two"><div><i className="budget-dot" /><span>Monthly category limits</span><strong>{money.format(monthlyFlexibleBudgetForSelectedMonth)}</strong></div><div><i className="actual-dot" /><span>Spent from category limits</span><strong>{money.format(monthlyBudgetExpenseTotal)}</strong></div></div><p className="clarity-note">This balance only includes expenses subtracted from category budgets. Other expenses still reduce your net worth.</p></>}</article>
+          {hasCategoryBudgetData && <article className={`month-card overview-budget-card ${!hasCategoryBudgetLimits ? "empty" : ""}`}><div className="card-heading"><div><span>{selectedMonth}</span><h2>This month&apos;s category budgets</h2></div><button onClick={() => navigate("budget")}>Edit budgets</button></div>{!hasCategoryBudgetLimits ? <div className="overview-budget-empty tracked"><strong>{categoriesNeedingLimits.length === 1 ? "1 category tracked automatically" : `${categoriesNeedingLimits.length} categories tracked automatically`}</strong><span>{moneyDetailed.format(monthlyUnbudgetedExpenseTotal)} spent this month. Set a monthly limit before Moneta labels the spending over budget.</span></div> : <><div className="budget-remaining"><span>CATEGORY BUDGET REMAINING</span><strong className={budgetAvailable < 0 ? "danger-text" : "success-text"}>{money.format(budgetAvailable)}</strong></div>{monthlyBudgetAbovePlanSafe > 0 && <p className="plan-budget-warning" role="status">Your category budget is {money.format(monthlyBudgetAbovePlanSafe)}/month above the safe monthly spend.</p>}<div className="stacked-track"><i className="actual" style={{ width: `${Math.min(100, monthlyBudgetExpenseTotal / monthlyFlexibleBudgetForSelectedMonth * 100)}%` }} /></div><div className="budget-breakdown two"><div><i className="budget-dot" /><span>Monthly category limits</span><strong>{money.format(monthlyFlexibleBudgetForSelectedMonth)}</strong></div><div><i className="actual-dot" /><span>Spent from category limits</span><strong>{money.format(monthlyBudgetExpenseTotal)}</strong></div></div>{categoriesNeedingLimits.length > 0 && <p className="unlimited-budget-note">{moneyDetailed.format(monthlyUnbudgetedExpenseTotal)} is tracked without a limit.</p>}<p className="clarity-note">This balance only includes expenses in categories with a monthly limit. Other expenses still reduce your net worth.</p></>}</article>}
           <article className="overview-transaction-preview">
             <div className="card-heading"><div><span>RECENT ACTIVITY</span><h2>Transactions</h2></div>{entries.length > 0 && <button type="button" onClick={() => navigate("transaction-history")}>View all →</button>}</div>
-            {entries.length === 0 ? <div className="preview-empty"><strong>No transactions yet</strong><span>Add your first income or expense to make this overview useful.</span><button type="button" onClick={goToAddTransaction}>Add your first transaction</button></div> : recentEntries.slice(0, overviewTransactionLimit).map((entry) => { const categoryLabel = entryCategoryNames(entry).join(" · "); return <button type="button" className="overview-transaction-row" aria-label={`View details for ${entry.description}`} key={entry.id} onClick={(event) => openTransactionDetail(entry, event.currentTarget)}><i className={entry.type}>{categoryLabel[0]}</i><span><strong title={entry.description}>{entry.description}</strong><small title={`${entry.date} · ${categoryLabel}`}>{entry.date} · {categoryLabel}</small></span><b className={entry.type}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b></button>; })}
+            {entries.length === 0 ? <div className="preview-empty"><strong>No transactions yet</strong><span>Add your first income or expense to make this overview useful.</span><button type="button" onClick={goToAddTransaction}>Add your first transaction</button></div> : recentEntries.slice(0, overviewTransactionLimit).map((entry) => { const categoryLabel = entryCategoryNames(entry).join(" · "); return <button type="button" className="overview-transaction-row" aria-label={`View details for ${entry.description}`} key={entry.id} onContextMenu={(event) => handleItemContextMenu(event, "transactions", entry.id, entry.description, "transaction")} onPointerDown={(event) => beginItemLongPress(event, "transactions", entry.id, entry.description, "transaction")} onPointerMove={moveItemLongPress} onPointerUp={endItemLongPress} onPointerCancel={endItemLongPress} onPointerLeave={endItemLongPress} onClick={(event) => { if (suppressNextItemClickRef.current) { suppressNextItemClickRef.current = false; return; } openTransactionDetail(entry, event.currentTarget); }}><i className={entry.type}>{categoryLabel[0]}</i><span><strong title={entry.description}>{entry.description}</strong><small title={`${entry.date} · ${categoryLabel}`}>{entry.date} · {categoryLabel}</small></span><b className={entry.type}>{entry.type === "income" ? "+" : "−"}{formatOriginalCurrency(entry.amount, entry.currency)}{entry.currency !== data.displayCurrency && <small>{money.format(toDisplay(entry))}</small>}</b></button>; })}
             <LoadMore shown={overviewTransactionLimit} total={recentEntries.length} step={3} onLoad={() => setOverviewTransactionLimit((current) => current + 3)} />
           </article>
         </div>}
@@ -1447,7 +1557,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
               </fieldset>}
             </form>
             <article className="transaction-list">
-              <div className="card-heading"><div><span>{selectedMonth.replace("-", " · ")}</span><h2>Actual activity</h2></div><div className="activity-heading-actions"><b>{monthEntries.length} entries</b>{monthEntries.length > 0 && <><button type="button" className={selectionScope === "transactions" ? "active" : ""} onClick={() => toggleSelectionMode("transactions")}>{selectionScope === "transactions" ? "Cancel" : "Select"}</button><button type="button" onClick={() => navigate("transaction-history")}>View all →</button></>}</div></div>
+              <div className="card-heading"><div><span>{selectedMonth.replace("-", " · ")}</span><h2>Actual activity</h2></div><div className="activity-heading-actions"><b>{monthEntries.length} entries</b>{monthEntries.length > 1 && <button type="button" className={selectionScope === "transactions" ? "active" : ""} onClick={() => toggleSelectionMode("transactions")}>{selectionScope === "transactions" ? "Cancel" : "Select multiple"}</button>}{monthEntries.length > 0 && <button type="button" onClick={() => navigate("transaction-history")}>View all →</button>}</div></div>
               {selectionScope === "transactions" && <SelectionBar count={selectedItems.length} noun="transactions" onDelete={() => deleteSelectedItems("transactions")} onCancel={cancelSelection} />}
               {monthEntries.length === 0 ? <div className="empty-state"><i>↕</i><strong>No transactions yet</strong><span>Add your first entry to start tracking.</span></div> : monthEntries.slice(0, activityLimit).map(renderTransactionRow)}
               <LoadMore shown={activityLimit} total={monthEntries.length} step={4} onLoad={() => setActivityLimit((current) => current + 4)} />
@@ -1468,7 +1578,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
             <div className="transaction-filter-result"><strong>{filteredMonthEntries.length}</strong><span>of {monthEntries.length}</span>{(transactionCategoryFilter !== "all" || transactionTypeFilter !== "all" || transactionBudgetFilter !== "all") && <button type="button" onClick={() => { setTransactionCategoryFilter("all"); setTransactionTypeFilter("all"); setTransactionBudgetFilter("all"); setTransactionLimit(8); cancelSelection(); }}>Clear</button>}</div>
           </div>
           <article className="transaction-list transaction-history-list">
-            <div className="card-heading"><div><span>{selectedMonth.replace("-", " · ")}</span><h2>All activity</h2></div><div className="list-heading-actions"><b>{filteredMonthEntries.length} entries</b><button type="button" className={selectionScope === "transactions" ? "active" : ""} onClick={() => toggleSelectionMode("transactions")}>{selectionScope === "transactions" ? "Cancel" : "Select"}</button></div></div>
+            <div className="card-heading"><div><span>{selectedMonth.replace("-", " · ")}</span><h2>All activity</h2></div><div className="list-heading-actions"><b>{filteredMonthEntries.length} entries</b>{filteredMonthEntries.length > 1 && <button type="button" className={selectionScope === "transactions" ? "active" : ""} onClick={() => toggleSelectionMode("transactions")}>{selectionScope === "transactions" ? "Cancel" : "Select multiple"}</button>}</div></div>
             {selectionScope === "transactions" && <SelectionBar count={selectedItems.length} noun="transactions" onDelete={() => deleteSelectedItems("transactions")} onCancel={cancelSelection} />}
             {visibleMonthEntries.length === 0 ? <div className="empty-state"><i>↕</i><strong>No matching transactions</strong><span>Change the filters or choose another month.</span></div> : visibleMonthEntries.map(renderTransactionRow)}
             <LoadMore shown={transactionLimit} total={filteredMonthEntries.length} step={8} onLoad={() => setTransactionLimit((current) => current + 8)} />
@@ -1482,9 +1592,9 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
             <CalculationValue className="capacity-number" label="Plan-safe monthly spend" value={money.format(monthlyLivingMoneyAvailable)} formula={planningFormula} rows={capacityCalculationRows} note="Every unpaid monthly and one-time payment is reserved through its end month. Paid linked payments are already reflected in net worth and are not reserved again. Future income is not assumed." />
             <button type="button" onClick={() => navigate("settings")}>{remainingPlanningMonths > 0 ? `${remainingPlanningMonths} months left · Edit` : "Choose new period"}</button>
           </section>
-          <section className={`budget-month-section ${!hasCategoryBudgetData ? "empty" : ""}`}>
-            <div className="budget-month-heading"><div><span>{selectedMonth}</span><h2>Monthly category budget</h2></div>{hasCategoryBudgetData && <CalculationValue className={`month-heading-number ${budgetAvailable < 0 ? "danger-text" : "success-text"}`} label={`${selectedMonth} category budget balance`} value={`${budgetAvailable < 0 ? "Over" : "Left"} ${money.format(Math.abs(budgetAvailable))}`} formula={`${moneyDetailed.format(monthlyBudgetTotal)} − ${moneyDetailed.format(monthlyBudgetExpenseTotal)} = ${moneyDetailed.format(budgetAvailable)}`} rows={budgetAvailableCalculationRows} />}</div>
-            {!hasCategoryBudgetData ? <div className="budget-month-empty"><strong>No category budget to compare yet</strong><span>Add a category below to start tracking this month&apos;s spending limit.</span></div> : <><div className="budget-month-values"><div><span>Category budgets</span><CalculationValue label={`${selectedMonth} monthly category budget`} value={money.format(monthlyLivingBudget)} formula="sum of active category budgets" rows={budgetCalculationRows} align="left" /></div><div><span>Spent from category limits</span><CalculationValue label={`${selectedMonth} spending from category limits`} value={money.format(monthlyBudgetExpenseTotal)} formula="sum of saved expenses marked for category budgets" rows={spentCalculationRows} align="left" /></div><div className={budgetAvailable < 0 ? "warning" : "positive"}><span>{budgetAvailable < 0 ? "Over budget" : "Remaining"}</span><CalculationValue label={`${selectedMonth} category budget balance`} value={money.format(Math.abs(budgetAvailable))} formula={`${moneyDetailed.format(monthlyBudgetTotal)} − ${moneyDetailed.format(monthlyBudgetExpenseTotal)} = ${moneyDetailed.format(budgetAvailable)}`} rows={budgetAvailableCalculationRows} /></div></div>{monthlyBudgetAbovePlanSafe > 0 && <p className="plan-budget-warning" role="status">This category budget is {money.format(monthlyBudgetAbovePlanSafe)}/month above your safe monthly spend.</p>}<div className="stacked-track"><i className={budgetAvailable < 0 ? "over" : "actual"} style={{ width: `${Math.min(100, monthlyBudgetTotal > 0 ? monthlyBudgetExpenseTotal / monthlyBudgetTotal * 100 : 0)}%` }} /></div></>}
+          <section className={`budget-month-section ${!hasCategoryBudgetLimits ? "empty" : ""}`}>
+            <div className="budget-month-heading"><div><span>{selectedMonth}</span><h2>Monthly category budget</h2></div>{hasCategoryBudgetLimits && <CalculationValue className={`month-heading-number ${budgetAvailable < 0 ? "danger-text" : "success-text"}`} label={`${selectedMonth} category budget balance`} value={`${budgetAvailable < 0 ? "Over" : "Left"} ${money.format(Math.abs(budgetAvailable))}`} formula={`${moneyDetailed.format(monthlyBudgetTotal)} − ${moneyDetailed.format(monthlyBudgetExpenseTotal)} = ${moneyDetailed.format(budgetAvailable)}`} rows={budgetAvailableCalculationRows} />}</div>
+            {!hasCategoryBudgetData ? <div className="budget-month-empty"><strong>No category budget to compare yet</strong><span>Record an expense or add a category below to start tracking a monthly limit.</span></div> : !hasCategoryBudgetLimits ? <div className="budget-month-empty tracked"><strong>Set {categoriesNeedingLimits.length === 1 ? "a limit for 1 tracked category" : `limits for ${categoriesNeedingLimits.length} tracked categories`}</strong><span>{moneyDetailed.format(monthlyUnbudgetedExpenseTotal)} has been recorded this month. Add limits below before Moneta calls the spending over budget.</span></div> : <><div className="budget-month-values"><div><span>Category budgets</span><CalculationValue label={`${selectedMonth} monthly category budget`} value={money.format(monthlyLivingBudget)} formula="sum of active category budgets" rows={budgetCalculationRows} align="left" /></div><div><span>Spent from category limits</span><CalculationValue label={`${selectedMonth} spending from category limits`} value={money.format(monthlyBudgetExpenseTotal)} formula="sum of saved expenses in categories with a limit" rows={spentCalculationRows} align="left" /></div><div className={budgetAvailable < 0 ? "warning" : "positive"}><span>{budgetAvailable < 0 ? "Over budget" : "Remaining"}</span><CalculationValue label={`${selectedMonth} category budget balance`} value={money.format(Math.abs(budgetAvailable))} formula={`${moneyDetailed.format(monthlyBudgetTotal)} − ${moneyDetailed.format(monthlyBudgetExpenseTotal)} = ${moneyDetailed.format(budgetAvailable)}`} rows={budgetAvailableCalculationRows} /></div></div>{categoriesNeedingLimits.length > 0 && <p className="unlimited-budget-note" role="status">{moneyDetailed.format(monthlyUnbudgetedExpenseTotal)} is tracked in {categoriesNeedingLimits.length} {categoriesNeedingLimits.length === 1 ? "category" : "categories"} without a limit.</p>}{monthlyBudgetAbovePlanSafe > 0 && <p className="plan-budget-warning" role="status">This category budget is {money.format(monthlyBudgetAbovePlanSafe)}/month above your safe monthly spend.</p>}<div className="stacked-track"><i className={budgetAvailable < 0 ? "over" : "actual"} style={{ width: `${Math.min(100, monthlyBudgetExpenseTotal / monthlyBudgetTotal * 100)}%` }} /></div></>}
           </section>
           <article className="category-budget">
             <div className="card-heading category-heading">
@@ -1492,19 +1602,20 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
               {displayedBudgetCategories.length > 0 && <div className="category-heading-actions">
                 <label><span>SORT BY</span><select value={categorySort} onChange={(event) => { setCategorySort(event.target.value as CategorySort); setBudgetListLimit(5); cancelSelection(); }}><option value="manual">Custom order</option><option value="budget-desc">Budget · high to low</option><option value="alphabetical">Alphabetical</option><option value="spent-desc">Most spent</option><option value="spent-asc">Least spent</option></select></label>
                 <CalculationValue label="Expected monthly budgets" value={money.format(monthlyBudgetTotal)} formula="sum of active category budgets" rows={budgetCalculationRows} />
-                <button type="button" className={`list-select ${selectionScope === "budgets" ? "active" : ""}`} onClick={() => toggleSelectionMode("budgets")}>{selectionScope === "budgets" ? "Cancel" : "Select"}</button>
+                {displayedBudgetCategories.length > 1 && <button type="button" className={`list-select ${selectionScope === "budgets" ? "active" : ""}`} onClick={() => toggleSelectionMode("budgets")}>{selectionScope === "budgets" ? "Cancel" : "Select multiple"}</button>}
               </div>}
             </div>
             <form className="budget-category-add" onSubmit={addBudgetCategory}><select aria-label="Category to add to budgets" value={budgetCategoryDraft} onChange={(event) => setBudgetCategoryDraft(event.target.value)}><option value="">Select a category</option>{availableBudgetCategories.map((category) => <option key={category}>{category}</option>)}</select><button disabled={!budgetCategoryDraft}>Add budget</button></form>
             {selectionScope === "budgets" && <SelectionBar count={selectedItems.length} noun="budgets" onDelete={() => deleteSelectedItems("budgets")} onCancel={cancelSelection} />}
-            {displayedBudgetCategories.length === 0 ? <div className="category-budget-empty"><strong>Add your first category budget</strong><span>Choose a category above, then set the amount you want to keep available each month.</span></div> : <div className="budget-mix-layout">
-              <div className="budget-donut-panel"><div className="budget-donut" style={{ background: budgetDonutGradient }}><div><strong>{money.format(monthlyBudgetTotal)}</strong><span>TOTAL</span></div></div><div className="budget-donut-legend">{budgetCategoryStats.length === 0 ? <span className="visual-empty">No budgets yet</span> : budgetCategoryStats.slice(0, budgetListLimit).map((item) => <div key={item.category}><i style={{ background: item.color }} /><span>{item.category}</span><strong>{Math.round(item.amount / monthlyBudgetTotal * 100)}%</strong></div>)}<LoadMore shown={budgetListLimit} total={budgetCategoryStats.length} step={5} onLoad={() => setBudgetListLimit((current) => current + 5)} /></div></div>
+            {displayedBudgetCategories.length === 0 ? <div className="category-budget-empty"><strong>Add your first category budget</strong><span>Choose a category above, then set the amount you want to keep available each month.</span></div> : <div className={`budget-mix-layout ${!hasCategoryBudgetLimits ? "limits-unset" : ""}`}>
+              {hasCategoryBudgetLimits && <div className="budget-donut-panel"><div className="budget-donut" style={{ background: budgetDonutGradient }}><div><strong>{money.format(monthlyBudgetTotal)}</strong><span>TOTAL</span></div></div><div className="budget-donut-legend">{budgetCategoryStats.slice(0, budgetListLimit).map((item) => <div key={item.category}><i style={{ background: item.color }} /><span>{item.category}</span><strong>{Math.round(item.amount / monthlyBudgetTotal * 100)}%</strong></div>)}<LoadMore shown={budgetListLimit} total={budgetCategoryStats.length} step={5} onLoad={() => setBudgetListLimit((current) => current + 5)} /></div></div>}
               <div className="budget-category-list">{displayedBudgetCategories.length === 0 ? <div className="budget-empty"><strong>No expected budgets</strong><span>Select a category above to add one.</span></div> : displayedBudgetCategories.slice(0, budgetListLimit).map((category) => {
                 const budget = monthlyBudgets[category] || 0;
                 const spent = spentByCategory[category] || 0;
-                const percent = budget > 0 ? spent / budget * 100 : spent > 0 ? 100 : 0;
+                const hasLimit = budget > 0;
+                const percent = hasLimit ? spent / budget * 100 : 0;
                 const balance = budget - spent;
-                return <div className={`category-row budget-category-row ${balance < 0 ? "over-budget" : ""} ${selectionScope === "budgets" ? "selecting" : ""}`} key={category}><div><strong title={category}>{category}</strong><span>{money.format(spent)} / {money.format(budget)}</span></div><div className="category-track" aria-label={`${category} is ${Math.round(percent)} percent used`}><i className={percent > 100 ? "over" : ""} style={{ width: `${Math.min(100, percent)}%` }} /></div><strong className={`budget-category-balance ${balance < 0 ? "over" : "left"}`}><small>{balance < 0 ? "OVER" : "LEFT"}</small>{money.format(Math.abs(balance))}</strong><label className="budget-amount-input"><span>Budget</span><div><i>{data.displayCurrency}</i><input aria-label={`${category} expected monthly budget`} type="text" inputMode="decimal" value={formatEditableMoney(budget)} placeholder="0" onChange={(event) => setMonthlyBudgets((current) => ({ ...current, [category]: parseEditableMoney(event.target.value) }))} /></div></label>{selectionScope === "budgets" && <label className="row-check budget-row-check"><input type="checkbox" checked={selectedItems.includes(category)} onChange={() => toggleSelectedItem(category)} /><span aria-hidden="true">✓</span><b className="sr-only">Select {category}</b></label>}</div>;
+                return <div className={`category-row budget-category-row ${hasLimit && balance < 0 ? "over-budget" : ""} ${!hasLimit ? "needs-limit" : ""} ${selectionScope === "budgets" ? "selecting" : ""}`} key={category} onContextMenu={(event) => handleItemContextMenu(event, "budgets", category, category, "budget")}><div className="budget-category-copy" onPointerDown={(event) => beginItemLongPress(event, "budgets", category, category, "budget")} onPointerMove={moveItemLongPress} onPointerUp={endItemLongPress} onPointerCancel={endItemLongPress} onPointerLeave={endItemLongPress}><strong title={category}>{category}</strong><span>{hasLimit ? `${money.format(spent)} / ${money.format(budget)}` : `${moneyDetailed.format(spent)} spent`}</span></div><div className={`category-track ${!hasLimit ? "no-limit" : ""}`} aria-label={hasLimit ? `${category} is ${Math.round(percent)} percent used` : `${category} has no monthly limit`}><i className={percent > 100 ? "over" : ""} style={{ width: `${Math.min(100, percent)}%` }} /></div><strong className={`budget-category-balance ${!hasLimit ? "unset" : balance < 0 ? "over" : "left"}`}><small>{!hasLimit ? "SET LIMIT" : balance < 0 ? "OVER" : "LEFT"}</small>{hasLimit ? money.format(Math.abs(balance)) : "—"}</strong><label className="budget-amount-input"><span>Budget</span><div><i>{data.displayCurrency}</i><input aria-label={`${category} expected monthly budget`} type="text" inputMode="decimal" value={formatEditableMoney(budget)} placeholder="0" onChange={(event) => setMonthlyBudgets((current) => ({ ...current, [category]: parseEditableMoney(event.target.value) }))} /></div></label><button type="button" className="item-more budget-row-more" aria-label={`More actions for ${category}`} aria-haspopup="menu" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openItemActions("budgets", category, category, "budget", rect.right, rect.bottom, event.currentTarget); }}>⋯</button>{selectionScope === "budgets" && <label className="row-check budget-row-check"><input type="checkbox" checked={selectedItems.includes(category)} onChange={() => toggleSelectedItem(category)} /><span aria-hidden="true">✓</span><b className="sr-only">Select {category}</b></label>}</div>;
               })}<LoadMore shown={budgetListLimit} total={displayedBudgetCategories.length} step={5} onLoad={() => setBudgetListLimit((current) => current + 5)} /></div>
             </div>}
           </article>
@@ -1528,23 +1639,23 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
               <div className="form-actions"><button className="submit-button" type="submit">{editingRecurringId ? "Save changes" : recurringDraft.intervalMonths === 0 ? "Add one-time payment" : "Add monthly payment"} <b>{editingRecurringId ? "✓" : "＋"}</b></button>{editingRecurringId && <button className="cancel-button" type="button" onClick={() => chooseRecurringPreset("recurring")}>Cancel</button>}</div>
             </form>
           </article>
-          <div className="fixed-cost-toolbar"><div className="filter-tabs" role="group" aria-label="Filter scheduled payments"><button type="button" className={fixedCostFilter === "all" ? "active" : ""} onClick={() => { setFixedCostFilter("all"); setFixedCostLimit(8); cancelSelection(); }}>All</button><button type="button" className={fixedCostFilter === "monthly" ? "active" : ""} onClick={() => { setFixedCostFilter("monthly"); setFixedCostLimit(8); cancelSelection(); }}>Monthly</button><button type="button" className={fixedCostFilter === "one-time" ? "active" : ""} onClick={() => { setFixedCostFilter("one-time"); setFixedCostLimit(8); cancelSelection(); }}>One-time</button></div><div className="list-heading-actions"><strong>{filteredFixedCosts.length} payments</strong><button type="button" className={selectionScope === "fixed-costs" ? "active" : ""} onClick={() => toggleSelectionMode("fixed-costs")}>{selectionScope === "fixed-costs" ? "Cancel" : "Select"}</button></div></div>
+          <div className="fixed-cost-toolbar"><div className="filter-tabs" role="group" aria-label="Filter scheduled payments"><button type="button" className={fixedCostFilter === "all" ? "active" : ""} onClick={() => { setFixedCostFilter("all"); setFixedCostLimit(8); cancelSelection(); }}>All</button><button type="button" className={fixedCostFilter === "monthly" ? "active" : ""} onClick={() => { setFixedCostFilter("monthly"); setFixedCostLimit(8); cancelSelection(); }}>Monthly</button><button type="button" className={fixedCostFilter === "one-time" ? "active" : ""} onClick={() => { setFixedCostFilter("one-time"); setFixedCostLimit(8); cancelSelection(); }}>One-time</button></div><div className="list-heading-actions"><strong>{filteredFixedCosts.length} payments</strong>{filteredFixedCosts.length > 1 && <button type="button" className={selectionScope === "fixed-costs" ? "active" : ""} onClick={() => toggleSelectionMode("fixed-costs")}>{selectionScope === "fixed-costs" ? "Cancel" : "Select multiple"}</button>}</div></div>
           {selectionScope === "fixed-costs" && <SelectionBar count={selectedItems.length} noun="fixed costs" onDelete={() => deleteSelectedItems("fixed-costs")} onCancel={cancelSelection} />}
           <article className="fixed-cost-full-list recurring-list">{visibleFixedCosts.length === 0 ? <div className="recurring-empty"><i>↻</i><strong>No matching costs</strong><span>Create a scheduled payment using the form above.</span></div> : visibleFixedCosts.map((item) => {
-            return <div className={`recurring-row ${selectionScope === "fixed-costs" ? "selecting" : ""}`} key={item.id}>{selectionScope === "fixed-costs" && <label className="row-check"><input type="checkbox" checked={selectedItems.includes(item.id)} onChange={() => toggleSelectedItem(item.id)} /><span aria-hidden="true">✓</span><b className="sr-only">Select {item.name}</b></label>}<i>{item.intervalMonths === 0 ? "1×" : "M"}</i><div className="recurring-copy"><strong title={item.name}>{item.name}</strong><span title={`${item.category} · ${item.intervalMonths === 0 ? `Due ${selectedMonth}` : `${selectedMonth} · Active ${item.startMonth}${item.endMonth ? `–${item.endMonth}` : "+"}`}`}>{item.category} · {item.intervalMonths === 0 ? `Due ${selectedMonth}` : `${selectedMonth} · Active ${item.startMonth}${item.endMonth ? `–${item.endMonth}` : "+"}`}</span></div><div className="recurring-amount"><strong>{money.format(item.amount)}</strong><span>{item.intervalMonths === 0 ? "ONE-TIME" : "MONTHLY"}</span></div><div className="recurring-actions"><button type="button" aria-label={`Edit ${item.name}`} onClick={() => editRecurringExpense(item)}>Edit</button></div></div>;
+            return <div className={`recurring-row ${selectionScope === "fixed-costs" ? "selecting" : ""}`} key={item.id} onContextMenu={(event) => handleItemContextMenu(event, "fixed-costs", item.id, item.name, "scheduled payment")}>{selectionScope === "fixed-costs" && <label className="row-check"><input type="checkbox" checked={selectedItems.includes(item.id)} onChange={() => toggleSelectedItem(item.id)} /><span aria-hidden="true">✓</span><b className="sr-only">Select {item.name}</b></label>}<i>{item.intervalMonths === 0 ? "1×" : "M"}</i><div className="recurring-copy" onPointerDown={(event) => beginItemLongPress(event, "fixed-costs", item.id, item.name, "scheduled payment")} onPointerMove={moveItemLongPress} onPointerUp={endItemLongPress} onPointerCancel={endItemLongPress} onPointerLeave={endItemLongPress}><strong title={item.name}>{item.name}</strong><span title={`${item.category} · ${item.intervalMonths === 0 ? `Due ${selectedMonth}` : `${selectedMonth} · Active ${item.startMonth}${item.endMonth ? `–${item.endMonth}` : "+"}`}`}>{item.category} · {item.intervalMonths === 0 ? `Due ${selectedMonth}` : `${selectedMonth} · Active ${item.startMonth}${item.endMonth ? `–${item.endMonth}` : "+"}`}</span></div><div className="recurring-amount"><strong>{money.format(item.amount)}</strong><span>{item.intervalMonths === 0 ? "ONE-TIME" : "MONTHLY"}</span></div><div className="recurring-actions"><button type="button" aria-label={`Edit ${item.name}`} onClick={() => editRecurringExpense(item)}>Edit</button><button type="button" className="item-more" aria-label={`More actions for ${item.name}`} aria-haspopup="menu" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openItemActions("fixed-costs", item.id, item.name, "scheduled payment", rect.right, rect.bottom, event.currentTarget); }}>⋯</button></div></div>;
           })}</article>
           <LoadMore shown={fixedCostLimit} total={filteredFixedCosts.length} step={8} onLoad={() => setFixedCostLimit((current) => current + 8)} />
         </div>}
 
         {view === "categories" && <div className="page categories-page">
-          <div className="page-title compact"><div><span>SETTINGS · ORGANIZE</span><h1>Categories</h1><p>Edit a name directly in its field, then press Enter or click outside to save.</p></div><div className="category-title-actions"><button className="secondary-action" type="button" onClick={() => navigate("settings")}>← Settings</button><strong className="category-count">{expenseCategories.length}</strong><button type="button" className={`list-select ${selectionScope === "categories" ? "active" : ""}`} onClick={() => toggleSelectionMode("categories")}>{selectionScope === "categories" ? "Cancel" : "Select"}</button></div></div>
+          <div className="page-title compact"><div><span>SETTINGS · ORGANIZE</span><h1>Categories</h1><p>Edit a name directly in its field, then press Enter or click outside to save.</p></div><div className="category-title-actions"><button className="secondary-action" type="button" onClick={() => navigate("settings")}>← Settings</button><strong className="category-count">{expenseCategories.length}</strong><button type="button" className={`list-select ${selectionScope === "categories" ? "active" : ""}`} onClick={() => toggleSelectionMode("categories")}>{selectionScope === "categories" ? "Cancel" : "Select multiple"}</button></div></div>
           {selectionScope === "categories" && <SelectionBar count={selectedItems.length} noun="categories" onDelete={() => deleteSelectedItems("categories")} onCancel={cancelSelection} />}
           <div className="category-manager-grid">
             {expenseCategories.slice(0, categoryLimit).map((category, index) => {
-              return <article className="category-manager-row" key={category}>
+              return <article className="category-manager-row" key={category} onContextMenu={(event) => handleItemContextMenu(event, "categories", category, category, "category")} onPointerDown={(event) => { if (!(event.target as HTMLElement).closest("input, button, label")) beginItemLongPress(event, "categories", category, category, "category"); }} onPointerMove={moveItemLongPress} onPointerUp={endItemLongPress} onPointerCancel={endItemLongPress} onPointerLeave={endItemLongPress}>
                 <i style={{ background: chartColors[index % chartColors.length] }} />
                 <label><span>NAME · EDITABLE</span><input defaultValue={category} aria-label={`Rename ${category}`} onBlur={(event) => renameCategory(category, event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></label>
-                <div className="category-manager-actions"><button disabled={index === 0} aria-label={`Move ${category} up`} onClick={() => moveCategory(index, -1)}>↑</button><button disabled={index === expenseCategories.length - 1} aria-label={`Move ${category} down`} onClick={() => moveCategory(index, 1)}>↓</button>{selectionScope === "categories" && <label className="row-check"><input type="checkbox" checked={selectedItems.includes(category)} onChange={() => toggleSelectedItem(category)} /><span aria-hidden="true">✓</span><b className="sr-only">Select {category}</b></label>}</div>
+                <div className="category-manager-actions"><button disabled={index === 0} aria-label={`Move ${category} up`} onClick={() => moveCategory(index, -1)}>↑</button><button disabled={index === expenseCategories.length - 1} aria-label={`Move ${category} down`} onClick={() => moveCategory(index, 1)}>↓</button><button type="button" className="item-more" aria-label={`More actions for ${category}`} aria-haspopup="menu" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openItemActions("categories", category, category, "category", rect.right, rect.bottom, event.currentTarget); }}>⋯</button>{selectionScope === "categories" && <label className="row-check"><input type="checkbox" checked={selectedItems.includes(category)} onChange={() => toggleSelectedItem(category)} /><span aria-hidden="true">✓</span><b className="sr-only">Select {category}</b></label>}</div>
               </article>;
             })}
             <form className="category-create-card" onSubmit={addCategory}><i>＋</i><input value={newCategory} aria-label="New category name" placeholder="New category" onChange={(event) => setNewCategory(event.target.value)} /><button>Add</button></form>
@@ -1612,6 +1723,13 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
           </>}
         </div>}
       </section>
+      {itemActions && <div className="item-context-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeItemActions(); }}>
+        <div ref={itemActionMenuRef} className="item-context-menu" role="menu" aria-label={`Actions for ${itemActions.label}`} style={{ left: itemActions.left, top: itemActions.top }}>
+          <div><span>{itemActions.noun.toUpperCase()}</span><strong title={itemActions.label}>{itemActions.label}</strong></div>
+          <button type="button" className="item-context-delete" role="menuitem" onClick={deleteContextItem}><TrashIcon /> Delete {itemActions.noun}</button>
+          <button type="button" className="item-context-cancel" role="menuitem" onClick={() => closeItemActions()}>Cancel</button>
+        </div>
+      </div>}
       {undoAction && <div className="undo-toast" role="status"><span>{undoAction.message}</span><button type="button" onClick={() => { undoAction.restore(); setUndoAction(null); }}>Undo</button><button className="undo-close" type="button" aria-label="Dismiss" onClick={() => setUndoAction(null)}>×</button></div>}
       {transactionDetailEntry && <div className="modal-backdrop transaction-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeTransactionDetail(); }}>
         <section ref={transactionDetailDialogRef} className="transaction-detail-modal" role="dialog" aria-modal="true" aria-labelledby="transaction-detail-title" aria-describedby="transaction-detail-summary" tabIndex={-1}>

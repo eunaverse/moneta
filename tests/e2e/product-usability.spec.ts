@@ -10,14 +10,10 @@ test("overview leads with the plan outcome and treats zero as setup, not loss", 
   await expect(planAnchor).toContainText("SAFE MONTHLY SPEND");
   await expect(planAnchor).toContainText("Add money to calculate");
 
-  const planBox = await planAnchor.boundingBox();
-  const wealthBox = await page.locator(".wealth-overview-card").boundingBox();
-  expect(planBox).not.toBeNull();
-  expect(wealthBox).not.toBeNull();
-  expect(planBox!.y).toBeLessThan(wealthBox!.y);
-
-  await expect(page.locator(".wealth-overview-card")).toHaveClass(/empty/);
-  await expect(page.locator(".wealth-track")).toHaveClass(/empty/);
+  await expect(page.locator(".overview-title").getByRole("button", { name: /Add transaction/ })).toHaveCount(0);
+  await expect(page.locator(".wealth-overview-card")).toHaveCount(0);
+  await expect(page.locator(".overview-budget-card")).toHaveCount(0);
+  await expect(page.locator(".overview-transaction-preview").getByRole("button", { name: "Add your first transaction" })).toBeVisible();
   await expect(page.locator(".overview-transaction-preview").getByRole("button", { name: /View all/ })).toHaveCount(0);
 });
 
@@ -41,7 +37,8 @@ test("overview explains category-budget math without an outside-budget total", a
   const budgetCard = page.locator(".overview-budget-card");
   await expect(budgetCard).toContainText("Monthly category limits");
   await expect(budgetCard).toContainText("Spent from category limits");
-  await expect(budgetCard).toContainText("This balance only includes expenses subtracted from category budgets");
+  await expect(budgetCard).toContainText("$125.00 is tracked without a limit");
+  await expect(budgetCard).toContainText("This balance only includes expenses in categories with a monthly limit");
   await expect(budgetCard).toContainText("Other expenses still reduce your net worth");
   await expect(budgetCard).not.toContainText("scheduled payments are reserved separately");
   await expect(budgetCard).not.toContainText("Budget spending");
