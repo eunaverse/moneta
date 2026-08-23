@@ -271,8 +271,7 @@ h1, h2, h3 { font-weight: 600; }
 .type-tabs { display: grid; grid-template-columns: 1fr 1fr; }
 .type-tabs button { padding: 10px; border: 1px solid var(--line); background: #faf9fc; color: var(--muted); }
 .type-tabs button + button { border-left: 0; }
-.type-tabs .active.expense { background: var(--coral); color: #fff; }
-.type-tabs .active.income { background: var(--mint); color: #fff; }
+.type-tabs .active { border-color: var(--purple); background: var(--purple); color: #fff; }
 .transaction-form label, .money-input { display: block; }
 .transaction-form label > span, .money-input > span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; }
 .transaction-form input, .transaction-form select, .category-add input { width: 100%; padding: 11px; border: 1px solid var(--line); border-radius: 8px; outline: 0; background: #fbfafe; }

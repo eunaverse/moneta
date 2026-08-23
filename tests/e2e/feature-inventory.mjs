@@ -20,6 +20,7 @@ export const features = [
   { id: "transaction-create-edit", journey: "Create and edit expense/income activity", spec: "tests/e2e/transactions.spec.ts" },
   { id: "transaction-detail", journey: "Open a saved transaction to read aligned receipt allocations, category totals, total reconciliation, and a legacy single-category fallback", spec: "tests/e2e/transaction-detail.spec.ts" },
   { id: "transaction-entry-method", journey: "Choose AI-assisted or manual entry and understand whether an expense reduces category limits", spec: "tests/e2e/product-usability.spec.ts" },
+  { id: "transaction-selection-tone", journey: "Choose an ordinary expense or income without a warning-colored selected state", spec: "tests/e2e/transaction-selection-tone.spec.ts" },
   { id: "transaction-filter-delete-undo", journey: "Filter, delete, and undo activity", spec: "tests/e2e/transactions.spec.ts" },
   { id: "automatic-budget-category", journey: "Add newly spent categories to Budget without inventing a monthly limit", spec: "tests/e2e/direct-item-actions.spec.ts" },
   { id: "direct-list-item-actions", journey: "Right-click or long-press a list item to delete it directly with Undo", spec: "tests/e2e/direct-item-actions.spec.ts" },
