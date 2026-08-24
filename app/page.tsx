@@ -2,11 +2,12 @@
 
 /* eslint-disable @next/next/no-img-element -- receipt previews use signed private-storage URLs */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { MonetaAuthGate, type MonetaAccount } from "../components/moneta-auth-gate";
 import { addMonths, calculatePlanningCapacity, isDueInMonth, isPaidInMonth, monthIndex } from "../lib/budget-calculations";
 import { createReceiptUrls, loadMonetaState, MonetaStateConflictError, removeReceipt, saveMonetaState, subscribeMonetaState, uploadReceipt, type MonetaStateRecord } from "../lib/moneta-repository";
 import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, normalizeSnapshot, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
+import { isE2EMode } from "../lib/e2e-mode";
 import type { AssetBalance, BudgetState, CategorySort, LedgerAllocation, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "../lib/moneta-types";
 import type { TransactionAiAllocationReviewField, TransactionAiResult, TransactionAiReviewField } from "../lib/transaction-ai";
 
@@ -274,6 +275,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const [undoAction, setUndoAction] = useState<{ message: string; restore: () => void } | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [cloudReady, setCloudReady] = useState(false);
+  const [planPeriodSetupOpen, setPlanPeriodSetupOpen] = useState(false);
+  const [planPeriodDraft, setPlanPeriodDraft] = useState({ startMonth: "", endMonth: "" });
   const [legacySnapshot, setLegacySnapshot] = useState<MonetaSnapshot | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
   const [syncMessage, setSyncMessage] = useState("");
@@ -385,6 +388,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     let active = true;
     setLoaded(false);
     setCloudReady(false);
+    setPlanPeriodSetupOpen(false);
+    setPlanPeriodDraft({ startMonth: "", endMonth: "" });
     setLegacySnapshot(null);
     setSyncStatus("loading");
     setSyncMessage("");
@@ -409,8 +414,14 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
           setSyncStatus("migration");
         } else {
           applySnapshot(createDefaultSnapshot());
-          setCloudReady(true);
-          setSyncStatus("saving");
+          const forceFirstUse = isE2EMode && new URL(window.location.href).searchParams.get("first-use") === "1";
+          if (!isE2EMode || forceFirstUse) {
+            setPlanPeriodSetupOpen(true);
+            setSyncStatus("loading");
+          } else {
+            setCloudReady(true);
+            setSyncStatus("saving");
+          }
         }
       }
       setLoaded(true);
@@ -562,23 +573,34 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     }
   };
 
-  const startWithEmptyAccount = async () => {
-    if (!window.confirm("Start this account with Moneta defaults? Your old browser data will remain on this device.")) return;
+  const startWithEmptyAccount = () => {
+    if (!window.confirm("Start without this browser data? You will choose your planning dates next, and the old local copy will remain on this device.")) return;
     const empty = createDefaultSnapshot();
+    applySnapshot(empty);
+    setLegacySnapshot(null);
+    setPlanPeriodDraft({ startMonth: "", endMonth: "" });
+    setPlanPeriodSetupOpen(true);
+    setSyncStatus("loading");
+  };
+
+  const planPeriodEndMinimum = planPeriodDraft.startMonth
+    ? monthIndex(planPeriodDraft.startMonth) > monthIndex(currentMonth) ? planPeriodDraft.startMonth : currentMonth
+    : "";
+  const planPeriodDraftValid = /^\d{4}-(0[1-9]|1[0-2])$/.test(planPeriodDraft.startMonth)
+    && /^\d{4}-(0[1-9]|1[0-2])$/.test(planPeriodDraft.endMonth)
+    && monthIndex(planPeriodDraft.endMonth) >= monthIndex(planPeriodEndMinimum);
+  const completePlanPeriodSetup = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!planPeriodDraftValid) return;
+    setData((current) => ({
+      ...current,
+      planningStartMonth: planPeriodDraft.startMonth,
+      planningEndMonth: planPeriodDraft.endMonth,
+    }));
+    setSelectedMonth(planPeriodDraft.startMonth);
+    setPlanPeriodSetupOpen(false);
+    setCloudReady(true);
     setSyncStatus("saving");
-    try {
-      const saved = await saveMonetaState(account.session.user.id, empty, remoteUpdatedAtRef.current);
-      remoteUpdatedAtRef.current = saved.updatedAt;
-      lastCloudSnapshotJsonRef.current = JSON.stringify(empty);
-      applySnapshot(empty);
-      setLegacySnapshot(null);
-      setCloudReady(true);
-      setSyncStatus("saved");
-      setSyncMessage("A new account workspace is ready. Your old browser data was not deleted.");
-    } catch (error) {
-      setSyncStatus("error");
-      setSyncMessage(error instanceof Error ? error.message : "The account workspace could not be created.");
-    }
   };
 
   const useCloudVersion = () => {
@@ -1447,6 +1469,18 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const syncLabel = syncStatus === "loading" ? "Loading account" : syncStatus === "migration" ? "Move device data" : syncStatus === "saving" ? "Syncing changes" : syncStatus === "error" ? "Sync needs attention" : "Synced to account";
   const currentNavigationItem = navigationItems.find((item) => isNavigationActive(item.view));
   if (!loaded) return <main className="auth-shell"><section className="auth-card loading"><div className="auth-mark">M</div><h1>Loading your workspace…</h1><p>{account.session.user.email}</p></section></main>;
+  if (planPeriodSetupOpen) return <main className="auth-shell plan-period-setup-shell"><section className="auth-card plan-period-setup-card">
+    <div className="auth-brand"><div className="auth-mark">M</div><strong>MONETA</strong></div>
+    <span>FIRST PLAN SETUP</span>
+    <h1>Choose your planning dates</h1>
+    <p>Pick the first month and the month your current money needs to last through. Moneta will not assume a two-year plan for you.</p>
+    <form className="plan-period-setup-form" onSubmit={completePlanPeriodSetup}>
+      <label><span>START MONTH</span><strong>When does this plan begin?</strong><input aria-label="Plan start month" required type="month" value={planPeriodDraft.startMonth} onChange={(event) => { const startMonth = event.target.value; const endMinimum = startMonth && monthIndex(startMonth) > monthIndex(currentMonth) ? startMonth : currentMonth; setPlanPeriodDraft((current) => ({ startMonth, endMonth: current.endMonth && monthIndex(current.endMonth) < monthIndex(endMinimum) ? "" : current.endMonth })); }} /></label>
+      <label><span>USE MONEY THROUGH</span><strong>When should the money last until?</strong><input aria-label="Plan end month" required type="month" disabled={!planPeriodDraft.startMonth} min={planPeriodEndMinimum || undefined} value={planPeriodDraft.endMonth} onChange={(event) => setPlanPeriodDraft((current) => ({ ...current, endMonth: event.target.value }))} /></label>
+      <button type="submit" disabled={!planPeriodDraftValid}>Start my plan</button>
+    </form>
+    <small>You can change both months later in Plan setup.</small>
+  </section></main>;
 
   return (
     <main className="app-shell">
