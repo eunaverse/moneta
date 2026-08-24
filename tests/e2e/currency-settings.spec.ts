@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { migrateLegacyAssetRecord } from "../../lib/moneta-state";
 import { expectNoHorizontalOverflow, openApp, openPrimaryView } from "./helpers";
 
 test.beforeEach(async ({ page }) => openApp(page));
@@ -16,6 +17,47 @@ test("new accounts use USD and no sample category budgets or import control", as
   expect(download.suggestedFilename()).toMatch(/^moneta-backup-\d{4}-\d{2}-\d{2}\.json$/);
   await expect(page.getByText(/Import/i)).toHaveCount(0);
   await expect(page.locator('input[type="file"][accept*="json"]')).toHaveCount(0);
+});
+
+test("migrates saved legacy balances to the current asset format once", async () => {
+  let persistedState;
+  const result = await migrateLegacyAssetRecord({
+    state: {
+      version: 2,
+      data: {
+        krwPrimary: 1_400_000,
+        usdCash: 500,
+        exchangeRate: 1_400,
+        planningStartMonth: "2026-08",
+        planningEndMonth: "2028-07",
+        monthlyIncome: 0,
+      },
+      entries: [{
+        id: "saved-expense",
+        date: "2026-08-20",
+        type: "expense",
+        category: "Food",
+        description: "Groceries",
+        amount: 70,
+        currency: "USD",
+      }],
+      monthlyBudgets: { Food: 650 },
+      expenseCategories: ["Food", "Other"],
+      budgetCategories: ["Food"],
+    },
+    updatedAt: "2026-08-24T12:00:00.000Z",
+  }, async (state) => {
+    persistedState = state;
+    return { state, updatedAt: "2026-08-24T12:01:00.000Z" };
+  });
+
+  expect(result.migrated).toBe(true);
+  expect(persistedState?.data.assets).toEqual([
+    { id: "legacy-primary-krw", name: "Primary account", amount: 1_400_000, currency: "KRW" },
+    { id: "legacy-usd-cash", name: "Cash", amount: 500, currency: "USD" },
+  ]);
+  expect(persistedState?.entries).toHaveLength(1);
+  expect(persistedState?.monthlyBudgets).toEqual({ Food: 650 });
 });
 
 test("converts a foreign asset with a user-entered exchange rate", async ({ page }) => {
