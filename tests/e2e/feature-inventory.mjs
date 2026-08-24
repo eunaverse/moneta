@@ -32,6 +32,7 @@ export const features = [
   { id: "receipt-validation", journey: "Reject a non-image receipt", spec: "tests/e2e/transactions.spec.ts" },
   { id: "database-owned-empty-state", journey: "Start with no sample balances or active category budgets", spec: "tests/e2e/currency-settings.spec.ts" },
   { id: "legacy-asset-migration", journey: "Persist saved legacy balances once in the current asset format", spec: "tests/e2e/currency-settings.spec.ts" },
+  { id: "device-asset-backup-recovery", journey: "Restore device-backed balances into an empty cloud asset list without replacing cloud transactions or budgets", spec: "tests/e2e/currency-settings.spec.ts" },
   { id: "primary-display-currency", journey: "Choose the currency used for totals and planning, with USD as the default", spec: "tests/e2e/currency-settings.spec.ts" },
   { id: "foreign-asset-conversion", journey: "Convert an asset with a user-entered exchange rate and preserve its original currency", spec: "tests/e2e/currency-settings.spec.ts" },
   { id: "foreign-transaction-conversion", journey: "Record foreign-currency activity and use its converted value in totals", spec: "tests/e2e/currency-settings.spec.ts" },

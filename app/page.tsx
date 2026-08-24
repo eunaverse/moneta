@@ -6,7 +6,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { MonetaAuthGate, type MonetaAccount } from "../components/moneta-auth-gate";
 import { addMonths, calculatePlanningCapacity, isDueInMonth, isPaidInMonth, monthIndex } from "../lib/budget-calculations";
 import { createReceiptUrls, loadMonetaState, MonetaStateConflictError, removeReceipt, saveMonetaState, subscribeMonetaState, uploadReceipt, type MonetaStateRecord } from "../lib/moneta-repository";
-import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, migrateLegacyAssetRecord, normalizeSnapshot, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
+import { createDefaultSnapshot, createDeviceAssetRecovery, DEFAULT_EXPENSE_CATEGORIES, migrateLegacyAssetRecord, normalizeSnapshot, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
 import { isE2EMode } from "../lib/e2e-mode";
 import type { AssetBalance, BudgetState, CategorySort, LedgerAllocation, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "../lib/moneta-types";
 import type { TransactionAiAllocationReviewField, TransactionAiResult, TransactionAiReviewField } from "../lib/transaction-ai";
@@ -278,6 +278,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const [planPeriodSetupOpen, setPlanPeriodSetupOpen] = useState(false);
   const [planPeriodDraft, setPlanPeriodDraft] = useState({ startMonth: "", endMonth: "" });
   const [legacySnapshot, setLegacySnapshot] = useState<MonetaSnapshot | null>(null);
+  const [deviceAssetBackup, setDeviceAssetBackup] = useState<MonetaSnapshot | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
   const [syncMessage, setSyncMessage] = useState("");
   const [remoteConflict, setRemoteConflict] = useState<MonetaStateRecord | null>(null);
@@ -391,6 +392,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     setPlanPeriodSetupOpen(false);
     setPlanPeriodDraft({ startMonth: "", endMonth: "" });
     setLegacySnapshot(null);
+    setDeviceAssetBackup(null);
     setSyncStatus("loading");
     setSyncMessage("");
     setRemoteConflict(null);
@@ -419,6 +421,10 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
         }
         if (!active) return;
         const normalized = normalizeSnapshot(acceptedRemote.state);
+        const deviceBackup = readLegacySnapshot();
+        if (deviceBackup && createDeviceAssetRecovery(normalized, deviceBackup)) {
+          setDeviceAssetBackup(deviceBackup);
+        }
         remoteUpdatedAtRef.current = acceptedRemote.updatedAt;
         lastCloudSnapshotJsonRef.current = JSON.stringify(normalized);
         applySnapshot(normalized);
@@ -545,6 +551,44 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     });
     return () => { cancelled = true; };
   }, [cloudReady, entries, loaded]);
+
+  const restoreDeviceAssetBackup = async () => {
+    if (!deviceAssetBackup || !currentSnapshotRef.current) return;
+    const recovered = createDeviceAssetRecovery(currentSnapshotRef.current, deviceAssetBackup);
+    if (!recovered) {
+      setDeviceAssetBackup(null);
+      return;
+    }
+
+    const recoveredJson = JSON.stringify(recovered);
+    setSyncStatus("saving");
+    setSyncMessage("Restoring balances from this device…");
+    submittedSnapshotJsonsRef.current.add(recoveredJson);
+    try {
+      const saved = await saveMonetaState(account.session.user.id, recovered, remoteUpdatedAtRef.current);
+      const normalized = normalizeSnapshot(saved.state);
+      remoteUpdatedAtRef.current = saved.updatedAt;
+      lastCloudSnapshotJsonRef.current = JSON.stringify(normalized);
+      applySnapshot(normalized);
+      setDeviceAssetBackup(null);
+      setSyncStatus("saved");
+      setSyncMessage("Balances restored from this device. Cloud transactions and budgets were kept.");
+    } catch (error) {
+      if (error instanceof MonetaStateConflictError) {
+        const latest = await loadMonetaState(account.session.user.id).catch(() => null);
+        if (latest) registerRemoteConflict(latest);
+        else {
+          setSyncStatus("error");
+          setSyncMessage("The cloud version changed. Reload it before restoring balances.");
+        }
+      } else {
+        setSyncStatus("error");
+        setSyncMessage(error instanceof Error ? error.message : "Balances could not be restored.");
+      }
+    } finally {
+      submittedSnapshotJsonsRef.current.delete(recoveredJson);
+    }
+  };
 
   const moveLegacyDataToAccount = async () => {
     if (!legacySnapshot) return;
@@ -1531,6 +1575,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       <section className="workspace">
         <header className="mobile-header"><button className="mobile-menu-button" type="button" aria-label="Open menu" aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={() => setMobileMenuOpen(true)}><i /><i /><i /></button><button className="logo" onClick={() => navigate("overview")}><span>M</span><strong>MONETA</strong></button><strong className="mobile-current-page">{currentNavigationItem ? navLabel(currentNavigationItem) : ""}</strong></header>
 
+        {deviceAssetBackup && <article className="migration-banner" role="region" aria-label="Device asset backup found"><div><span>DEVICE ASSET BACKUP FOUND</span><strong>Restore balances saved in this browser?</strong><small>Only assets and any missing exchange rates will be restored. Your cloud transactions, budgets, schedules, income, and plan settings will stay unchanged.</small></div><div><button type="button" className="migration-primary" disabled={syncStatus === "saving"} onClick={() => void restoreDeviceAssetBackup()}>{syncStatus === "saving" ? "Restoring…" : "Restore balances"}</button><button type="button" disabled={syncStatus === "saving"} onClick={() => setDeviceAssetBackup(null)}>Not now</button></div></article>}
         {legacySnapshot && <article className="migration-banner"><div><span>DEVICE DATA FOUND</span><strong>Move this browser&apos;s Moneta data to your account?</strong><small>Transactions, budgets, schedules, and receipt photos will become available on your other devices. The local copy stays as a backup.</small></div><div><button type="button" className="migration-primary" disabled={syncStatus === "saving"} onClick={moveLegacyDataToAccount}>{syncStatus === "saving" ? "Moving…" : "Move to my account"}</button><button type="button" disabled={syncStatus === "saving"} onClick={startWithEmptyAccount}>Start clean</button></div></article>}
         {remoteConflict && <div className="sync-error sync-conflict" role="alert"><div><strong>Newer changes found</strong><span>Choose the cloud copy or keep the changes on this screen.</span></div><div className="sync-conflict-actions"><button type="button" onClick={useCloudVersion}>Use cloud</button><button type="button" className="conflict-keep" disabled={syncStatus === "saving"} onClick={() => void keepMyVersion()}>{syncStatus === "saving" ? "Saving…" : "Keep mine"}</button></div></div>}
         {syncStatus === "error" && !remoteConflict && <div className="sync-error" role="alert"><strong>Sync paused</strong><span>{syncMessage || "Check the database connection and try again."}</span></div>}

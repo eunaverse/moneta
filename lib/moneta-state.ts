@@ -221,6 +221,31 @@ export async function migrateLegacyAssetRecord(
   return { record: saved, migrated: true };
 }
 
+export function createDeviceAssetRecovery(
+  remote: MonetaSnapshot,
+  deviceBackup: MonetaSnapshot,
+): MonetaSnapshot | null {
+  if (remote.data.assets.length > 0 || deviceBackup.data.assets.length === 0) return null;
+
+  const exchangeRates = { ...remote.data.exchangeRates };
+  if (remote.data.displayCurrency === deviceBackup.data.displayCurrency) {
+    deviceBackup.data.assets.forEach((asset) => {
+      if (asset.currency === remote.data.displayCurrency || exchangeRates[asset.currency] > 0) return;
+      const backupRate = deviceBackup.data.exchangeRates[asset.currency];
+      if (backupRate > 0) exchangeRates[asset.currency] = backupRate;
+    });
+  }
+
+  return {
+    ...remote,
+    data: {
+      ...remote.data,
+      assets: deviceBackup.data.assets.map((asset) => ({ ...asset })),
+      exchangeRates,
+    },
+  };
+}
+
 export function toDisplayAmount(
   amount: number,
   currency: string,

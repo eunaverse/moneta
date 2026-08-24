@@ -60,6 +60,63 @@ test("migrates saved legacy balances to the current asset format once", async ()
   expect(persistedState?.monthlyBudgets).toEqual({ Food: 650 });
 });
 
+test("restores only device-backed assets when the saved remote asset list is empty", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __MONETA_E2E_REMOTE_STATE__: unknown }).__MONETA_E2E_REMOTE_STATE__ = {
+      version: 2,
+      data: {
+        assets: [],
+        displayCurrency: "USD",
+        exchangeRates: {},
+        planningStartMonth: "2026-08",
+        planningEndMonth: "2028-07",
+        monthlyIncome: 4_000,
+      },
+      entries: [{
+        id: "remote-expense",
+        date: "2026-08-20",
+        type: "expense",
+        category: "Food",
+        description: "Remote groceries",
+        amount: 70,
+        currency: "USD",
+        countsTowardMonthlyBudget: true,
+      }],
+      monthlyBudgets: { Food: 650 },
+      expenseCategories: ["Food", "Other"],
+      budgetCategories: ["Food"],
+      categorySort: "manual",
+      recurringExpenses: [],
+      insightMonths: 6,
+    };
+    localStorage.setItem("move-money-budget", JSON.stringify({
+      krwPrimary: 1_400_000,
+      krwSecondary: 0,
+      krwEmergency: 0,
+      usdCash: 500,
+      exchangeRate: 1_400,
+      planningStartMonth: "2026-08",
+      planningEndMonth: "2028-07",
+      monthlyIncome: 0,
+    }));
+  });
+  await page.goto("/");
+
+  const recovery = page.getByRole("region", { name: "Device asset backup found" });
+  await expect(recovery).toBeVisible();
+  await recovery.getByRole("button", { name: "Restore balances" }).click();
+
+  await expect(recovery).toHaveCount(0);
+  await page.getByText("Accounts & calculation").click();
+  await expect(page.getByText("Primary account", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cash", { exact: true })).toBeVisible();
+
+  await openPrimaryView(page, "Transactions");
+  await expect(page.getByText("Remote groceries", { exact: true })).toBeVisible();
+  await openPrimaryView(page, "Budget");
+  await expect(page.getByLabel("Food expected monthly budget")).toHaveValue("650");
+});
+
 test("converts a foreign asset with a user-entered exchange rate", async ({ page }) => {
   await page.getByRole("button", { name: "Edit assets" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });

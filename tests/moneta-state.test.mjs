@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDefaultSnapshot,
+  createDeviceAssetRecovery,
   migrateLegacyAssetRecord,
   normalizeSnapshot,
   toDisplayAmount,
@@ -186,6 +187,74 @@ test("does not rewrite a record that already has the modern assets array", async
   assert.equal(result.migrated, false);
   assert.equal(result.record, record);
   assert.equal(persistCalls, 0);
+});
+
+test("offers a device-backup recovery when the remote asset list was overwritten empty", () => {
+  const remote = normalizeSnapshot(legacySnapshot({
+    version: 2,
+    data: {
+      assets: [],
+      displayCurrency: "USD",
+      exchangeRates: { EUR: 0.91 },
+      planningStartMonth: "2026-08",
+      planningEndMonth: "2028-07",
+      monthlyIncome: 4_000,
+    },
+    entries: [{
+      id: "remote-expense",
+      date: "2026-08-20",
+      type: "expense",
+      category: "Food",
+      description: "Groceries",
+      amount: 70,
+      currency: "USD",
+    }],
+    monthlyBudgets: { Food: 650 },
+    budgetCategories: ["Food"],
+  }), "2026-08");
+  const deviceBackup = normalizeSnapshot(legacySnapshot({
+    data: {
+      ...legacyData,
+      krwPrimary: 1_400_000,
+      usdCash: 500,
+    },
+  }), "2026-08");
+
+  const recovered = createDeviceAssetRecovery(remote, deviceBackup);
+
+  assert.ok(recovered);
+  assert.deepEqual(recovered.data.assets, deviceBackup.data.assets);
+  assert.deepEqual(recovered.data.exchangeRates, { EUR: 0.91, KRW: 1_400 });
+  assert.equal(recovered.data.monthlyIncome, 4_000);
+  assert.deepEqual(recovered.entries, remote.entries);
+  assert.deepEqual(recovered.monthlyBudgets, { Food: 650 });
+  assert.deepEqual(recovered.budgetCategories, ["Food"]);
+});
+
+test("does not offer device recovery over a nonempty remote asset list", () => {
+  const remote = normalizeSnapshot(legacySnapshot({
+    version: 2,
+    data: {
+      assets: [{ id: "remote-cash", name: "Cash", amount: 25, currency: "USD" }],
+      displayCurrency: "USD",
+      exchangeRates: {},
+      planningStartMonth: "2026-08",
+      planningEndMonth: "2028-07",
+      monthlyIncome: 0,
+    },
+  }), "2026-08");
+  const deviceBackup = normalizeSnapshot(legacySnapshot({
+    data: { ...legacyData, usdCash: 500 },
+  }), "2026-08");
+
+  assert.equal(createDeviceAssetRecovery(remote, deviceBackup), null);
+});
+
+test("does not offer device recovery when the device backup has no assets", () => {
+  const remote = createDefaultSnapshot("2026-08");
+  const emptyDeviceBackup = normalizeSnapshot(legacySnapshot(), "2026-08");
+
+  assert.equal(createDeviceAssetRecovery(remote, emptyDeviceBackup), null);
 });
 
 test("migrates legacy KRW and USD balances plus the user-entered rate", () => {

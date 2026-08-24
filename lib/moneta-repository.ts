@@ -4,6 +4,12 @@ import { supabase } from "./supabase";
 
 const RECEIPT_BUCKET = "receipts";
 
+declare global {
+  interface Window {
+    __MONETA_E2E_REMOTE_STATE__?: MonetaSnapshot;
+  }
+}
+
 export type MonetaStateRecord = {
   state: MonetaSnapshot;
   updatedAt: string;
@@ -22,7 +28,10 @@ const requireClient = () => {
 };
 
 export async function loadMonetaState(userId: string): Promise<MonetaStateRecord | null> {
-  if (isE2EMode) return null;
+  if (isE2EMode) {
+    const state = typeof window === "undefined" ? undefined : window.__MONETA_E2E_REMOTE_STATE__;
+    return state ? { state, updatedAt: "2026-08-24T12:00:00.000Z" } : null;
+  }
   const client = requireClient();
   const { data, error } = await client
     .from("finance_states")
