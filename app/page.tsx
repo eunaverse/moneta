@@ -6,7 +6,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { MonetaAuthGate, type MonetaAccount } from "../components/moneta-auth-gate";
 import { addMonths, calculatePlanningCapacity, isDueInMonth, isPaidInMonth, monthIndex } from "../lib/budget-calculations";
 import { createReceiptUrls, loadMonetaState, MonetaStateConflictError, removeReceipt, saveMonetaState, subscribeMonetaState, uploadReceipt, type MonetaStateRecord } from "../lib/moneta-repository";
-import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, normalizeSnapshot, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
+import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, migrateLegacyAssetRecord, normalizeSnapshot, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
 import { isE2EMode } from "../lib/e2e-mode";
 import type { AssetBalance, BudgetState, CategorySort, LedgerAllocation, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "../lib/moneta-types";
 import type { TransactionAiAllocationReviewField, TransactionAiResult, TransactionAiReviewField } from "../lib/transaction-ai";
@@ -397,15 +397,34 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     remoteConflictRef.current = null;
     remoteUpdatedAtRef.current = null;
     lastCloudSnapshotJsonRef.current = null;
-    loadMonetaState(account.session.user.id).then((remote) => {
+    loadMonetaState(account.session.user.id).then(async (remote) => {
       if (!active) return;
       if (remote) {
-        const normalized = normalizeSnapshot(remote.state);
-        remoteUpdatedAtRef.current = remote.updatedAt;
+        let acceptedRemote: { state: StoredMonetaSnapshot; updatedAt: string } = remote;
+        let migrationMessage = "";
+        let migrationFailed = false;
+        try {
+          const migration = await migrateLegacyAssetRecord(remote, (state, expectedUpdatedAt) => (
+            saveMonetaState(account.session.user.id, state, expectedUpdatedAt)
+          ));
+          acceptedRemote = migration.record;
+          if (migration.migrated) migrationMessage = "Saved balances were updated to the current format.";
+        } catch (error) {
+          migrationFailed = true;
+          if (error instanceof MonetaStateConflictError) {
+            const latest = await loadMonetaState(account.session.user.id).catch(() => null);
+            if (latest) acceptedRemote = latest;
+          }
+          migrationMessage = "Balances loaded, but their saved format could not be updated yet.";
+        }
+        if (!active) return;
+        const normalized = normalizeSnapshot(acceptedRemote.state);
+        remoteUpdatedAtRef.current = acceptedRemote.updatedAt;
         lastCloudSnapshotJsonRef.current = JSON.stringify(normalized);
         applySnapshot(normalized);
         setCloudReady(true);
-        setSyncStatus("saved");
+        setSyncStatus(migrationFailed ? "error" : "saved");
+        setSyncMessage(migrationMessage);
       } else {
         const legacy = readLegacySnapshot();
         if (legacy) {

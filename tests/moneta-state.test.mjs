@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDefaultSnapshot,
+  migrateLegacyAssetRecord,
   normalizeSnapshot,
   toDisplayAmount,
 } from "../lib/moneta-state.ts";
@@ -115,6 +116,76 @@ test("keeps an explicit modern empty asset list authoritative over stale legacy 
 
   assert.deepEqual(normalized.data.assets, []);
   assert.deepEqual(normalized.data.exchangeRates, {});
+});
+
+test("persists a legacy asset record once as a modern snapshot without changing transactions or budgets", async () => {
+  const stored = legacySnapshot({
+    version: 2,
+    data: {
+      ...legacyData,
+      krwPrimary: 1_400_000,
+      usdCash: 500,
+    },
+    entries: [{
+      id: "saved-expense",
+      date: "2026-08-20",
+      type: "expense",
+      category: "Food",
+      description: "Groceries",
+      amount: 70,
+      currency: "USD",
+    }],
+    monthlyBudgets: { Food: 650 },
+    budgetCategories: ["Food"],
+  });
+  let persisted;
+
+  const result = await migrateLegacyAssetRecord(
+    { state: stored, updatedAt: "2026-08-24T12:00:00.000Z" },
+    async (state, expectedUpdatedAt) => {
+      persisted = { state, expectedUpdatedAt };
+      return { state, updatedAt: "2026-08-24T12:01:00.000Z" };
+    },
+  );
+
+  assert.equal(result.migrated, true);
+  assert.equal(result.record.updatedAt, "2026-08-24T12:01:00.000Z");
+  assert.equal(persisted.expectedUpdatedAt, "2026-08-24T12:00:00.000Z");
+  assert.deepEqual(persisted.state.data.assets, [
+    { id: "legacy-primary-krw", name: "Primary account", amount: 1_400_000, currency: "KRW" },
+    { id: "legacy-usd-cash", name: "Cash", amount: 500, currency: "USD" },
+  ]);
+  assert.equal("krwPrimary" in persisted.state.data, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(persisted.state.entries)), stored.entries);
+  assert.deepEqual(persisted.state.monthlyBudgets, { Food: 650 });
+  assert.deepEqual(persisted.state.budgetCategories, ["Food"]);
+});
+
+test("does not rewrite a record that already has the modern assets array", async () => {
+  let persistCalls = 0;
+  const record = {
+    state: legacySnapshot({
+      version: 2,
+      data: {
+        assets: [],
+        displayCurrency: "USD",
+        exchangeRates: {},
+        planningStartMonth: "2026-08",
+        planningEndMonth: "2028-07",
+        monthlyIncome: 0,
+      },
+    }),
+    updatedAt: "2026-08-24T12:00:00.000Z",
+  };
+
+  const result = await migrateLegacyAssetRecord(record, async () => {
+    persistCalls += 1;
+    return record;
+  });
+
+  assert.equal(result.migrated, false);
+  assert.equal(result.record, record);
+  assert.equal(persistCalls, 0);
 });
 
 test("migrates legacy KRW and USD balances plus the user-entered rate", () => {

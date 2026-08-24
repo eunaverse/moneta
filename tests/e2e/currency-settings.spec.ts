@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { normalizeSnapshot } from "../../lib/moneta-state";
+import { migrateLegacyAssetRecord } from "../../lib/moneta-state";
 import { expectNoHorizontalOverflow, openApp, openPrimaryView } from "./helpers";
 
 test.beforeEach(async ({ page }) => openApp(page));
@@ -19,37 +19,45 @@ test("new accounts use USD and no sample category budgets or import control", as
   await expect(page.locator('input[type="file"][accept*="json"]')).toHaveCount(0);
 });
 
-test("keeps saved balances when a v2 account still uses legacy asset fields", () => {
-  const normalized = normalizeSnapshot({
-    version: 2,
-    data: {
-      krwPrimary: 1_400_000,
-      usdCash: 500,
-      exchangeRate: 1_400,
-      planningStartMonth: "2026-08",
-      planningEndMonth: "2028-07",
-      monthlyIncome: 0,
+test("migrates saved legacy balances to the current asset format once", async () => {
+  let persistedState;
+  const result = await migrateLegacyAssetRecord({
+    state: {
+      version: 2,
+      data: {
+        krwPrimary: 1_400_000,
+        usdCash: 500,
+        exchangeRate: 1_400,
+        planningStartMonth: "2026-08",
+        planningEndMonth: "2028-07",
+        monthlyIncome: 0,
+      },
+      entries: [{
+        id: "saved-expense",
+        date: "2026-08-20",
+        type: "expense",
+        category: "Food",
+        description: "Groceries",
+        amount: 70,
+        currency: "USD",
+      }],
+      monthlyBudgets: { Food: 650 },
+      expenseCategories: ["Food", "Other"],
+      budgetCategories: ["Food"],
     },
-    entries: [{
-      id: "saved-expense",
-      date: "2026-08-20",
-      type: "expense",
-      category: "Food",
-      description: "Groceries",
-      amount: 70,
-      currency: "USD",
-    }],
-    monthlyBudgets: { Food: 650 },
-    expenseCategories: ["Food", "Other"],
-    budgetCategories: ["Food"],
-  }, "2026-08");
+    updatedAt: "2026-08-24T12:00:00.000Z",
+  }, async (state) => {
+    persistedState = state;
+    return { state, updatedAt: "2026-08-24T12:01:00.000Z" };
+  });
 
-  expect(normalized.data.assets).toEqual([
+  expect(result.migrated).toBe(true);
+  expect(persistedState?.data.assets).toEqual([
     { id: "legacy-primary-krw", name: "Primary account", amount: 1_400_000, currency: "KRW" },
     { id: "legacy-usd-cash", name: "Cash", amount: 500, currency: "USD" },
   ]);
-  expect(normalized.entries).toHaveLength(1);
-  expect(normalized.monthlyBudgets).toEqual({ Food: 650 });
+  expect(persistedState?.entries).toHaveLength(1);
+  expect(persistedState?.monthlyBudgets).toEqual({ Food: 650 });
 });
 
 test("converts a foreign asset with a user-entered exchange rate", async ({ page }) => {

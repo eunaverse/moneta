@@ -33,6 +33,15 @@ export type StoredMonetaSnapshot = Partial<Omit<MonetaSnapshot, "version" | "dat
   data?: LegacyBudgetState;
 };
 
+export type StoredMonetaRecord = {
+  state: StoredMonetaSnapshot;
+  updatedAt: string;
+};
+
+type PersistMonetaSnapshot = (state: MonetaSnapshot, expectedUpdatedAt: string) => Promise<StoredMonetaRecord>;
+
+const LEGACY_ASSET_FIELDS = ["krwPrimary", "krwSecondary", "krwEmergency", "usdCash"] as const;
+
 const localMonthKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const finiteNonNegative = (value: unknown) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
 const currencyCode = (value: unknown, fallback = "USD") => {
@@ -41,6 +50,13 @@ const currencyCode = (value: unknown, fallback = "USD") => {
 };
 const validMonth = (value: unknown) => /^\d{4}-\d{2}$/.test(String(value || ""));
 const migrateCategory = (value: string) => CATEGORY_MIGRATION[value] || value;
+
+export const needsLegacyAssetMigration = (snapshot: StoredMonetaSnapshot) => {
+  const storedData = snapshot.data;
+  return Boolean(storedData
+    && !Array.isArray(storedData.assets)
+    && LEGACY_ASSET_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(storedData, field)));
+};
 
 const sanitizeAssets = (assets: unknown, displayCurrency: string): AssetBalance[] => {
   if (!Array.isArray(assets)) return [];
@@ -140,8 +156,7 @@ export function normalizeSnapshot(snapshot: StoredMonetaSnapshot, currentMonth =
     };
   }) as LedgerEntry[];
   const hasStoredAssets = Array.isArray(storedData.assets);
-  const usesLegacyAssets = !hasStoredAssets && ["krwPrimary", "krwSecondary", "krwEmergency", "usdCash"]
-    .some((field) => Object.prototype.hasOwnProperty.call(storedData, field));
+  const usesLegacyAssets = needsLegacyAssetMigration(snapshot);
   const isModern = Number(snapshot.version) >= 2 || hasStoredAssets;
   const assets = hasStoredAssets ? sanitizeAssets(storedData.assets, displayCurrency) : usesLegacyAssets ? [
     { id: "legacy-primary-krw", name: "Primary account", amount: finiteNonNegative(storedData.krwPrimary), currency: "KRW" },
@@ -194,6 +209,16 @@ export function normalizeSnapshot(snapshot: StoredMonetaSnapshot, currentMonth =
     recurringExpenses,
     insightMonths: Math.max(1, Math.min(24, Number(snapshot.insightMonths) || 6)),
   };
+}
+
+export async function migrateLegacyAssetRecord(
+  record: StoredMonetaRecord,
+  persist: PersistMonetaSnapshot,
+): Promise<{ record: StoredMonetaRecord; migrated: boolean }> {
+  if (!needsLegacyAssetMigration(record.state)) return { record, migrated: false };
+  const migratedState = normalizeSnapshot(record.state);
+  const saved = await persist(migratedState, record.updatedAt);
+  return { record: saved, migrated: true };
 }
 
 export function toDisplayAmount(
