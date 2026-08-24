@@ -139,15 +139,20 @@ export function normalizeSnapshot(snapshot: StoredMonetaSnapshot, currentMonth =
       allocations,
     };
   }) as LedgerEntry[];
-  const isModern = Number(snapshot.version) >= 2 || Array.isArray(storedData.assets);
-  const assets = isModern ? sanitizeAssets(storedData.assets, displayCurrency) : [
+  const hasStoredAssets = Array.isArray(storedData.assets);
+  const usesLegacyAssets = !hasStoredAssets && ["krwPrimary", "krwSecondary", "krwEmergency", "usdCash"]
+    .some((field) => Object.prototype.hasOwnProperty.call(storedData, field));
+  const isModern = Number(snapshot.version) >= 2 || hasStoredAssets;
+  const assets = hasStoredAssets ? sanitizeAssets(storedData.assets, displayCurrency) : usesLegacyAssets ? [
     { id: "legacy-primary-krw", name: "Primary account", amount: finiteNonNegative(storedData.krwPrimary), currency: "KRW" },
     { id: "legacy-secondary-krw", name: "Secondary account", amount: finiteNonNegative(storedData.krwSecondary), currency: "KRW" },
     { id: "legacy-emergency-krw", name: "Emergency fund", amount: finiteNonNegative(storedData.krwEmergency), currency: "KRW" },
     { id: "legacy-usd-cash", name: "Cash", amount: finiteNonNegative(storedData.usdCash), currency: "USD" },
-  ].filter((asset) => asset.amount > 0);
-  const exchangeRates = isModern ? sanitizeRates(storedData.exchangeRates, displayCurrency) : {};
-  if (!isModern && (assets.some((asset) => asset.currency === "KRW") || entries.some((entry) => entry.currency === "KRW"))) {
+  ].filter((asset) => asset.amount > 0) : [];
+  const exchangeRates = sanitizeRates(storedData.exchangeRates, displayCurrency);
+  if (usesLegacyAssets
+    && !(exchangeRates.KRW > 0)
+    && (assets.some((asset) => asset.currency === "KRW") || entries.some((entry) => entry.currency === "KRW"))) {
     exchangeRates.KRW = finiteNonNegative(storedData.exchangeRate);
   }
   const categories = Array.from(new Set((Array.isArray(snapshot.expenseCategories) && snapshot.expenseCategories.length > 0

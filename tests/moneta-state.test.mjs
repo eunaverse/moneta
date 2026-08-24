@@ -67,6 +67,56 @@ test("normalization preserves explicit v2 database values without merging sample
   assert.deepEqual(normalized.budgetCategories, []);
 });
 
+test("recovers legacy assets from a mixed v2 snapshot without dropping transactions or budgets", () => {
+  const normalized = normalizeSnapshot(legacySnapshot({
+    version: 2,
+    data: {
+      ...legacyData,
+      krwPrimary: 1_400_000,
+      usdCash: 500,
+    },
+    entries: [{
+      id: "saved-expense",
+      date: "2026-08-20",
+      type: "expense",
+      category: "Food",
+      description: "Groceries",
+      amount: 70,
+      currency: "USD",
+    }],
+    monthlyBudgets: { Food: 650 },
+    budgetCategories: ["Food"],
+  }), "2026-08");
+
+  assert.deepEqual(
+    normalized.data.assets.map(({ name, amount, currency }) => ({ name, amount, currency })),
+    [
+      { name: "Primary account", amount: 1_400_000, currency: "KRW" },
+      { name: "Cash", amount: 500, currency: "USD" },
+    ],
+  );
+  assert.equal(normalized.data.exchangeRates.KRW, 1_400);
+  assert.equal(normalized.entries.length, 1);
+  assert.deepEqual(normalized.monthlyBudgets, { Food: 650 });
+  assert.deepEqual(normalized.budgetCategories, ["Food"]);
+});
+
+test("keeps an explicit modern empty asset list authoritative over stale legacy fields", () => {
+  const normalized = normalizeSnapshot(legacySnapshot({
+    version: 2,
+    data: {
+      ...legacyData,
+      assets: [],
+      krwPrimary: 1_400_000,
+      displayCurrency: "USD",
+      exchangeRates: {},
+    },
+  }), "2026-08");
+
+  assert.deepEqual(normalized.data.assets, []);
+  assert.deepEqual(normalized.data.exchangeRates, {});
+});
+
 test("migrates legacy KRW and USD balances plus the user-entered rate", () => {
   const normalized = normalizeSnapshot(legacySnapshot({
     data: {
