@@ -184,6 +184,45 @@ const formatEditableMoney = (value: number) => value
 const parseEditableMoney = (value: string) => Math.max(0, Number(value.replace(/[^\d.]/g, "")) || 0);
 const parseSignedEditableMoney = (value: string) => Number(value.replace(/[^\d.-]/g, "")) || 0;
 
+const sanitizeTransactionAmountText = (value: string) => {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const decimalIndex = cleaned.indexOf(".");
+  if (decimalIndex < 0) return cleaned;
+  const whole = cleaned.slice(0, decimalIndex) || "0";
+  const fraction = cleaned.slice(decimalIndex + 1).replace(/\./g, "").slice(0, 2);
+  return `${whole}.${fraction}`;
+};
+
+function TransactionAmountField({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const [text, setText] = useState(() => formatEditableMoney(value));
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) setText(formatEditableMoney(value));
+  }, [value]);
+
+  return <label>
+    <span>Amount</span>
+    <input
+      type="text"
+      inputMode="decimal"
+      required
+      value={text}
+      placeholder="0"
+      onFocus={() => { focusedRef.current = true; }}
+      onChange={(event) => {
+        const next = sanitizeTransactionAmountText(event.target.value);
+        setText(next);
+        onChange(parseEditableMoney(next));
+      }}
+      onBlur={() => {
+        focusedRef.current = false;
+        setText(formatEditableMoney(parseEditableMoney(text)));
+      }}
+    />
+  </label>;
+}
+
 function MoneyInput({ label, value, onChange, unit, step = 1 }: { label: string; value: number; onChange: (value: number) => void; unit: string; step?: number }) {
   return (
     <label className="money-input">
@@ -1588,7 +1627,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
               <label><span>Date</span><input type="date" required value={draft.date} onChange={(event) => { clearTransactionAiReviewField("date"); setDraft((current) => ({ ...current, date: event.target.value })); }} /></label>
               {draft.allocations.length === 0 && <label><span>Category</span><select value={draft.category} onChange={(event) => { clearTransactionAiReviewField("category"); const category = event.target.value; setDraft((current) => ({ ...current, category, countsTowardMonthlyBudget: current.type === "expense" ? category !== "Tuition" : current.countsTowardMonthlyBudget })); }}>{(draft.type === "expense" ? expenseCategories : incomeCategories).map((category) => <option key={category}>{category}</option>)}</select></label>}
               <label className="wide"><span>Description</span><input required placeholder="e.g. Grocery run" value={draft.description} onChange={(event) => { clearTransactionAiReviewField("description"); setDraft((current) => ({ ...current, description: event.target.value })); }} /></label>
-              <label><span>Amount</span><input type="text" inputMode="decimal" required value={formatEditableMoney(draft.amount)} placeholder="0" onChange={(event) => { clearTransactionAiReviewField("amount"); setDraft((current) => ({ ...current, amount: parseEditableMoney(event.target.value) })); }} /></label>
+              <TransactionAmountField value={draft.amount} onChange={(amount) => { clearTransactionAiReviewField("amount"); setDraft((current) => ({ ...current, amount })); }} />
               <label><span>Currency</span><select value={draft.currency} onChange={(event) => { clearTransactionAiReviewField("currency"); setDraft((current) => ({ ...current, currency: event.target.value })); }}>{currencyCodes.map((currency) => <option key={currency} value={currency}>{currencyLabel(currency)}</option>)}</select></label>
               {draft.type === "expense" && missingReceiptAllocationReview && <section className="receipt-allocation-empty wide" aria-label="Receipt items need review"><div><span>RECEIPT ITEMS NEED REVIEW</span><strong>AI could not produce a complete category split</strong><small>Add the readable items yourself, or keep this as one category when the receipt is not itemized.</small></div><div><button type="button" onClick={addReceiptAllocation}>Add receipt items</button><button type="button" className="secondary" onClick={() => clearTransactionAiReviewField("allocations")}>Use one category</button></div></section>}
               {draft.type === "expense" && draft.allocations.length > 0 && <fieldset className="receipt-allocation-editor wide" aria-label="Receipt category split">
