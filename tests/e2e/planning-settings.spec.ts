@@ -86,7 +86,7 @@ test("edits assets, the fixed plan period, and insights period", async ({ page }
   const lookback = page.locator(".insight-range-controls").getByRole("spinbutton");
   await lookback.fill("12");
   await expect(lookback).toHaveValue("12");
-  await expect(page.locator(".insights-empty-state")).toContainText("Add a transaction to unlock spending insights");
+  await expect(page.locator(".insights-empty-state")).toContainText("No spending yet");
 });
 
 test("creates and renames a category and exposes a download-only backup", async ({ page }) => {

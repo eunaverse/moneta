@@ -16,7 +16,7 @@ test("adds a budget and updates its amount", async ({ page }) => {
 });
 
 test("creates a bounded monthly payment, filters it, and links actual spending", async ({ page }) => {
-  await page.getByRole("button", { name: "Manage scheduled payments" }).click();
+  await page.getByRole("button", { name: "Scheduled payments", exact: true }).click();
   const schedule = page.locator(".recurring-form");
   await schedule.getByLabel("Name").fill("Gym membership");
   await schedule.getByLabel("Amount").fill("80");

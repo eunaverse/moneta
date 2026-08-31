@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => openApp(page));
 
 test("empty account explains the setup path before presenting projections", async ({ page }) => {
   const setupGuide = page.locator(".setup-guide");
-  await expect(setupGuide.getByRole("heading", { name: "Set up a trustworthy plan" })).toBeVisible();
+  await expect(setupGuide.getByRole("heading", { name: "Set up your plan" })).toBeVisible();
   await expect(setupGuide).toContainText("Add assets & income");
   await expect(setupGuide).toContainText("Review plan dates");
   await expect(setupGuide).toContainText("Add scheduled payments");
@@ -27,7 +27,8 @@ test("planning terms stay distinct and no-data insights remain neutral", async (
   await openPrimaryView(page, "Insights");
   await expect(page.locator(".insight-plan-kicker")).toContainText("SAFE MONTHLY SPEND");
   const action = page.locator(".insights-empty-state");
-  await expect(action).toContainText("Add a transaction to unlock spending insights");
+  await expect(action).toContainText("No spending yet");
+  await expect(action.getByRole("button", { name: "Add transaction" })).toBeVisible();
   await expect(action).not.toContainText("Room under limits");
   await expect(page.locator(".trend-card, .insight-kpis, .over-limit-panel")).toHaveCount(0);
 });
@@ -59,8 +60,8 @@ test("key financial labels meet the desktop readability floor", async ({ page },
   for (const selector of [
     ".overview-plan-anchor > div:first-child > span",
     ".overview-plan-anchor p",
-    ".setup-guide-intro > span",
-    ".preview-empty span",
+    ".setup-guide-intro > h2",
+    ".preview-empty strong",
   ]) {
     const fontSize = await page.locator(selector).first().evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
     expect(fontSize, selector).toBeGreaterThanOrEqual(12);

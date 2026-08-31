@@ -59,7 +59,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /draft\.linksPlannedPayment/);
   assert.match(page, /FIXED PLAN/);
   assert.match(page, /Safe monthly spend/);
-  assert.match(page, /Moneta reserves unpaid scheduled payments, then spreads the remaining money through your plan end date/);
+  assert.doesNotMatch(page, /Moneta reserves unpaid scheduled payments, then spreads the remaining money through your plan end date/);
   assert.match(page, /function CalculationValue/);
   assert.match(page, /calculation-tooltip/);
   assert.match(css, /\.calculation-value:hover > \.calculation-tooltip/);
@@ -186,7 +186,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(css, /\.budget-impact/);
   assert.match(css, /\.budget-status\.excluded/);
   assert.match(page, /view === "what-if"/);
-  assert.match(page, /PREVIEW ONLY/);
+  assert.doesNotMatch(page, /PREVIEW ONLY/);
   assert.match(page, /scenarioStatus/);
   assert.match(page, /ESTIMATED BALANCE AT PLAN END/);
   assert.match(page, /What-if calculation breakdown/);
@@ -195,14 +195,14 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /view === "settings"/);
   assert.match(page, /Primary display currency/);
   assert.match(page, /Download backup/);
-  assert.match(page, /Moneta uses only rates you save here/);
+  assert.match(page, /Set foreign units per 1/);
   assert.match(stateModel, /displayCurrency: "USD"/);
   assert.match(stateModel, /assets: \[\]/);
   assert.match(stateModel, /monthlyBudgets: \{\}/);
   assert.match(stateModel, /toDisplayAmount/);
   assert.doesNotMatch(page, /Export or import|importBackup|accept="application\/json/);
   assert.doesNotMatch(page, /krwPrimary|krwSecondary|krwEmergency|usdCash|data\.exchangeRate\b/);
-  assert.match(page, /Manage scheduled payments/);
+  assert.match(page, />Scheduled payments<\/button>/);
   assert.match(page, /ADD PAYMENT/);
   assert.match(css, /button:focus-visible/);
   assert.doesNotMatch(css, /\.mobile-quick-add/);

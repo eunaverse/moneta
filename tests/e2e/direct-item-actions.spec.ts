@@ -93,7 +93,7 @@ test("a budget row has the same direct removal menu and Undo", async ({ page }) 
 
 test("a scheduled payment can be removed from its row and restored", async ({ page }) => {
   await openPrimaryView(page, "Budget");
-  await page.getByRole("button", { name: "Manage scheduled payments" }).click();
+  await page.getByRole("button", { name: "Scheduled payments", exact: true }).click();
   const form = page.locator(".recurring-form");
   await form.getByLabel("Name").fill("Gym membership");
   await form.getByLabel("Amount").fill("80");
