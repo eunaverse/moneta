@@ -5,8 +5,8 @@ test.beforeEach(async ({ page }) => openApp(page));
 
 test("empty overview gives a direct first transaction action", async ({ page }) => {
   const emptyState = page.locator(".overview-transaction-preview");
-  await expect(emptyState.getByText("No transactions yet")).toBeVisible();
-  await emptyState.getByRole("button", { name: "Add your first transaction" }).click();
+  await expect(emptyState.getByText("No transactions", { exact: true })).toBeVisible();
+  await emptyState.getByRole("button", { name: "Add transaction" }).click();
   await expect(page.getByRole("heading", { name: "Add a transaction" })).toBeVisible();
 });
 
@@ -14,7 +14,7 @@ test("budget separates monthly planning from scheduled payments", async ({ page 
   await openPrimaryView(page, "Budget");
   await expect(page.getByRole("heading", { name: "Category budgets" })).toBeVisible();
   await expect(page.locator(".recurring-form")).toHaveCount(0);
-  await page.getByRole("button", { name: "Manage scheduled payments" }).click();
+  await page.getByRole("button", { name: "Scheduled payments", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Scheduled payments", level: 1 })).toBeVisible();
   await expect(page.locator(".recurring-form")).toBeVisible();
 });
@@ -59,6 +59,6 @@ test("core mobile controls and copy meet touch and readability floors", async ({
   const menuBox = await page.getByRole("button", { name: "Open menu" }).boundingBox();
   expect(menuBox?.width).toBeGreaterThanOrEqual(44);
   expect(menuBox?.height).toBeGreaterThanOrEqual(44);
-  const paragraphSize = await page.locator(".overview-title p").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
-  expect(paragraphSize).toBeGreaterThanOrEqual(16);
+  const titleSize = await page.locator(".overview-title h1").evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+  expect(titleSize).toBeGreaterThanOrEqual(32);
 });

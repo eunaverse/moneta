@@ -6,7 +6,7 @@ test("separates the insight range from the live plan and rolls overdue payments 
   await openApp(page);
 
   await openPrimaryView(page, "Budget");
-  await page.getByRole("button", { name: "Manage scheduled payments" }).click();
+  await page.getByRole("button", { name: "Scheduled payments", exact: true }).click();
   const schedule = page.locator(".recurring-form");
   await schedule.getByRole("button", { name: "One-time" }).click();
   await schedule.getByLabel("Name").fill("Tuition");

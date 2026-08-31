@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => openApp(page));
 
 test("new accounts use USD and no sample category budgets or import control", async ({ page }) => {
   await openPrimaryView(page, "Budget");
-  await expect(page.locator(".category-budget-empty")).toContainText("Add your first category budget");
+  await expect(page.locator(".category-budget-empty")).toContainText("No category budgets");
   await expect(page.getByLabel("Housing expected monthly budget")).toHaveCount(0);
 
   await openPrimaryView(page, "Settings");

@@ -3,7 +3,7 @@ import { expectNoHorizontalOverflow, openApp, openPrimaryView } from "./helpers"
 
 test.beforeEach(async ({ page }) => openApp(page));
 
-test("key explanatory copy follows one responsive measure system", async ({ page }, testInfo) => {
+test("concise supporting copy stays readable at supported widths", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes("mobile"), "desktop context covers the supported responsive widths");
 
   await openPrimaryView(page, "Insights");
@@ -22,13 +22,13 @@ test("key explanatory copy follows one responsive measure system", async ({ page
       };
     });
 
-    expect(typography.lines, `${width}px Insights preview title`).toBe(2);
+    expect(typography.lines, `${width}px Insights preview title`).toBe(1);
     expect(typography.textWrap, `${width}px Insights preview title`).toBe("balance");
     await expectNoHorizontalOverflow(page);
   }
 
   await openPrimaryView(page, "Settings");
-  for (const selector of [".page-title p", ".settings-grid p"]) {
+  for (const selector of [".settings-grid p", ".preference-settings-grid p"]) {
     const copy = page.locator(selector).first();
     const typography = await copy.evaluate((element) => {
       const style = getComputedStyle(element);

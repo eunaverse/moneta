@@ -13,7 +13,7 @@ test("overview leads with the plan outcome and treats zero as setup, not loss", 
   await expect(page.locator(".overview-title").getByRole("button", { name: /Add transaction/ })).toHaveCount(0);
   await expect(page.locator(".wealth-overview-card")).toHaveCount(0);
   await expect(page.locator(".overview-budget-card")).toHaveCount(0);
-  await expect(page.locator(".overview-transaction-preview").getByRole("button", { name: "Add your first transaction" })).toBeVisible();
+  await expect(page.locator(".overview-transaction-preview").getByRole("button", { name: "Add transaction" })).toBeVisible();
   await expect(page.locator(".overview-transaction-preview").getByRole("button", { name: /View all/ })).toHaveCount(0);
 });
 
@@ -47,19 +47,19 @@ test("overview explains category-budget math without an outside-budget total", a
 
 test("empty planning screens show the next action and preview future insights", async ({ page }) => {
   await openPrimaryView(page, "Budget");
-  await expect(page.locator(".category-budget-empty")).toContainText("Add your first category budget");
+  await expect(page.locator(".category-budget-empty")).toContainText("No category budgets");
   await expect(page.locator(".category-heading-actions")).toHaveCount(0);
   await expect(page.locator(".budget-donut-panel")).toHaveCount(0);
 
   await openPrimaryView(page, "Insights");
   const emptyState = page.locator(".insights-empty-state");
-  await expect(emptyState).toContainText("Add a transaction to unlock spending insights");
-  await expect(emptyState.getByRole("button", { name: "Add first transaction" })).toBeVisible();
+  await expect(emptyState).toContainText("No spending yet");
+  await expect(emptyState.getByRole("button", { name: "Add transaction" })).toBeVisible();
   const preview = page.locator(".insights-preview");
   await expect(preview).toContainText("Spending trend");
   await expect(preview).toContainText("Top category");
   await expect(preview).toContainText("Budget alerts");
-  await expect(preview).toContainText("These fill in after your first expense");
+  await expect(preview).toContainText("After your first expense");
   await expect(page.locator(".trend-card, .insight-kpis, .over-limit-panel")).toHaveCount(0);
 });
 
@@ -100,8 +100,8 @@ test("mobile workspaces keep full page names and readable supporting text", asyn
   expect(await currentPage.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
   for (const selector of [
-    ".transaction-ai-heading p",
     ".transaction-ai-actions > small",
+    ".receipt-upload small",
   ]) {
     const size = await page.locator(selector).first().evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
     expect(size, selector).toBeGreaterThanOrEqual(12);

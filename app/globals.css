@@ -315,8 +315,8 @@ h1, h2, h3 { font-weight: 600; }
 .receipt-upload > input { position: absolute; width: 1px !important; height: 1px; padding: 0 !important; opacity: 0; overflow: hidden; }
 .receipt-upload > div { display: grid; grid-template-columns: 32px 1fr; padding: 13px; border: 1px dashed #bdb5dc; border-radius: 10px; background: #f6f3ff; }
 .receipt-upload > div i { grid-row: 1 / 3; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; background: #e6e0ff; color: var(--purple); font-style: normal; }
-.receipt-upload > div strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--purple-dark); font-size: 10px; }
-.receipt-upload > div small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.receipt-upload > div strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--purple-dark); font-size: 12px; }
+.receipt-upload > div small { margin-top: 3px; color: var(--muted); font-size: 12px; }
 .receipt-error { grid-column: 1 / -1; margin: -4px 0 0; color: #c34632; font-size: 9px; }
 .receipt-thumb { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line) !important; border-radius: 9px; overflow: hidden; }
 .receipt-thumb img { width: 100%; height: 100%; display: block; object-fit: cover; }
@@ -1239,7 +1239,7 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 
 /* Ask users to choose one transaction entry path at a time. */
 .transaction-entry-method { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.transaction-entry-method > button { min-width: 0; min-height: 88px; display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-areas: "entry-mode-icon entry-mode-title" "entry-mode-icon entry-mode-copy"; align-content: center; gap: 3px 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); text-align: left; }
+.transaction-entry-method > button { min-width: 0; min-height: 64px; display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-areas: "entry-mode-icon entry-mode-title"; align-content: center; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); text-align: left; }
 .transaction-entry-method > button > span { grid-area: entry-mode-icon; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: #f0edf6; color: #6b6478; }
 .transaction-entry-method > button > strong { grid-area: entry-mode-title; font-size: 13px; }
 .transaction-entry-method > button > small { grid-area: entry-mode-copy; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.35; text-overflow: ellipsis; }
@@ -1336,7 +1336,7 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   .overview-plan-anchor { padding: 22px 20px; }
   .overview-plan-anchor h2 { font-size: 34px; }
   .transaction-form { padding: 20px; }
-  .transaction-entry-method > button { min-height: 82px; }
+  .transaction-entry-method > button { min-height: 64px; }
   .transaction-ai-assistant { padding: 15px; }
   .receipt-allocation-editor { padding: 14px; }
   .receipt-allocation-heading { display: grid; }
