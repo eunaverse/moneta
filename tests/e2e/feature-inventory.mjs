@@ -18,7 +18,7 @@ export const features = [
   { id: "settings-responsive-structure", journey: "Give structural settings enough width and prevent control collisions", spec: "tests/e2e/workspace-layout.spec.ts" },
   { id: "plan-foundation-separation", journey: "Keep plan calculation inputs distinct from display, language, backup, and account preferences", spec: "tests/e2e/purpose-navigation.spec.ts" },
   { id: "settings-change-clarity", journey: "Understand autosave and what a primary currency change affects", spec: "tests/e2e/product-usability.spec.ts" },
-  { id: "transaction-create-edit", journey: "Create and edit expense/income activity", spec: "tests/e2e/transactions.spec.ts" },
+  { id: "transaction-create-edit", journey: "Create and edit expense/income activity with whole or decimal amounts", spec: "tests/e2e/transactions.spec.ts" },
   { id: "manual-transaction-image", journey: "Attach a receipt image while entering an expense manually", spec: "tests/e2e/manual-receipt-minimal-copy.spec.ts" },
   { id: "minimal-primary-copy", journey: "Keep primary workspaces concise without removing labels, errors, or financial conditions", spec: "tests/e2e/manual-receipt-minimal-copy.spec.ts" },
   { id: "transaction-detail", journey: "Open a saved transaction to read aligned receipt allocations, category totals, total reconciliation, and a legacy single-category fallback", spec: "tests/e2e/transaction-detail.spec.ts" },
