@@ -1388,3 +1388,15 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .trend-bars .trend-scheduled { background: var(--yellow); }
 .trend-bars .trend-flexible { background: var(--purple); }
 .trend-bars.compact .trend-stack { width: min(13px, 58%); }
+
+/* Keep advanced tools discoverable without competing with daily money tasks. */
+.sidebar nav button:nth-child(4), .mobile-drawer nav button:nth-child(4) { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.overview-budget-card .budget-breakdown, .overview-budget-card .clarity-note { display: none; }
+.overview-budget-card .budget-remaining { margin-bottom: 12px; }
+.trend-note { margin: 8px 0 0; font-size: 12px; }
+
+@media (max-width: 700px) {
+  .budget-capacity-section .capacity-plan-facts, .budget-month-values > div:nth-child(1) { display: none; }
+  .scenario-breakdown { display: none; }
+  .trend-note { display: none; }
+}
