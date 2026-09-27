@@ -313,3 +313,10 @@ test("normalization drops a corrupted receipt allocation instead of distorting c
 
   assert.equal(normalized.entries[0].allocations, undefined);
 });
+
+test("normalization preserves valid savings goals and clamps progress to the target", () => {
+  const normalized = normalizeSnapshot(legacySnapshot({
+    goals: [{ id: "emergency", name: "Emergency fund", targetAmount: 10_000, currentAmount: 12_000, deadline: "2027-08" }],
+  }), "2026-08");
+  assert.deepEqual(normalized.goals, [{ id: "emergency", name: "Emergency fund", targetAmount: 10_000, currentAmount: 10_000, deadline: "2027-08" }]);
+});

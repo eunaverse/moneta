@@ -200,7 +200,8 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(stateModel, /assets: \[\]/);
   assert.match(stateModel, /monthlyBudgets: \{\}/);
   assert.match(stateModel, /toDisplayAmount/);
-  assert.doesNotMatch(page, /Export or import|importBackup|accept="application\/json/);
+  assert.match(page, /Restore JSON/);
+  assert.match(page, /Import CSV/);
   assert.doesNotMatch(page, /krwPrimary|krwSecondary|krwEmergency|usdCash|data\.exchangeRate\b/);
   assert.match(page, />Scheduled payments<\/button>/);
   assert.match(page, /ADD PAYMENT/);

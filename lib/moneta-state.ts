@@ -1,5 +1,5 @@
 import { addMonths, monthIndex } from "./budget-calculations.ts";
-import type { AssetBalance, BudgetState, CategorySort, LedgerAllocation, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "./moneta-types";
+import type { AssetBalance, BudgetState, CategorySort, FinancialGoal, LedgerAllocation, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "./moneta-types";
 
 export const DEFAULT_EXPENSE_CATEGORIES = ["Housing", "Food", "Transport", "Insurance & Health", "Tuition", "Shopping", "Travel", "Other"];
 
@@ -90,6 +90,19 @@ const sanitizeBudgets = (budgets: unknown) => {
   return Object.fromEntries(Object.entries(budgets as Record<string, unknown>).map(([key, value]) => [migrateCategory(key), finiteNonNegative(value)]));
 };
 
+const sanitizeGoals = (goals: unknown): FinancialGoal[] => {
+  if (!Array.isArray(goals)) return [];
+  return goals.flatMap((goal, index) => {
+    if (!goal || typeof goal !== "object") return [];
+    const candidate = goal as Partial<FinancialGoal>;
+    const name = String(candidate.name || "").trim().slice(0, 80);
+    const deadline = validMonth(candidate.deadline) ? String(candidate.deadline) : "";
+    const targetAmount = finiteNonNegative(candidate.targetAmount);
+    if (!name || !deadline || targetAmount <= 0) return [];
+    return [{ id: String(candidate.id || `goal-${index + 1}`), name, targetAmount, currentAmount: Math.min(targetAmount, finiteNonNegative(candidate.currentAmount)), deadline }];
+  });
+};
+
 const isUntouchedLegacySample = (budgets: MonthlyBudgets, budgetCategories: string[]) => {
   const keys = Object.keys(budgets);
   const sampleKeys = Object.keys(LEGACY_SAMPLE_BUDGETS);
@@ -133,6 +146,7 @@ export function createDefaultSnapshot(currentMonth = localMonthKey()): MonetaSna
     categorySort: "manual",
     recurringExpenses: [],
     insightMonths: 6,
+    goals: [],
   };
 }
 
@@ -208,6 +222,7 @@ export function normalizeSnapshot(snapshot: StoredMonetaSnapshot, currentMonth =
     categorySort,
     recurringExpenses,
     insightMonths: Math.max(1, Math.min(24, Number(snapshot.insightMonths) || 6)),
+    goals: sanitizeGoals(snapshot.goals),
   };
 }
 

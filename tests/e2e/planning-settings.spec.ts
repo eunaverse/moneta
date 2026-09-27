@@ -89,7 +89,7 @@ test("edits assets, the fixed plan period, and insights period", async ({ page }
   await expect(page.locator(".insights-empty-state")).toContainText("No spending yet");
 });
 
-test("creates and renames a category and exposes a download-only backup", async ({ page }) => {
+test("creates and renames a category and exposes portable backup tools", async ({ page }) => {
   await openPrimaryView(page, "Settings");
   await page.getByRole("button", { name: /Manage/ }).click();
   await page.getByLabel("New category name").fill("Pets");
@@ -102,5 +102,17 @@ test("creates and renames a category and exposes a download-only backup", async 
 
   await page.getByRole("button", { name: /Settings/ }).first().click();
   await expect(page.getByRole("button", { name: "Download backup" })).toBeVisible();
-  await expect(page.locator('input[type="file"][accept*="json"]')).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Restore JSON" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import CSV" })).toBeVisible();
+});
+
+test("creates a savings goal with a deadline and visible progress", async ({ page }) => {
+  await openPrimaryView(page, "Settings");
+  await page.getByLabel("Goal name").fill("Emergency fund");
+  await page.getByLabel("Goal target").fill("10000");
+  await page.getByLabel("Goal current amount").fill("2500");
+  await page.getByLabel("Goal deadline").fill("2030-12");
+  await page.getByRole("button", { name: "Add goal" }).click();
+  await expect(page.locator(".goal-list")).toContainText("Emergency fund");
+  await expect(page.locator(".goal-list")).toContainText("25%");
 });

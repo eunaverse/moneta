@@ -13,11 +13,11 @@ async function primaryNavigation(page: Page) {
 test("primary navigation uses user tasks instead of internal feature names", async ({ page }) => {
   const navigation = await primaryNavigation(page);
   await expect(navigation.locator(".nav-label")).toHaveText([
-    "Overview",
-    "Transactions",
-    "Budget",
+    "Today",
+    "Activity",
+    "Plan",
     "Try a scenario",
-    "Spending insights",
+    "Review",
     "Plan setup",
   ]);
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { summarizeSpending, recommendBudgets } from '../lib/spending-summary.ts';
+import { calculateOverBudgetCategories, summarizeSpending, recommendBudgets } from '../lib/spending-summary.ts';
 
 const entry = (overrides = {}) => ({ id: 'a', date: '2025-12-12', type: 'expense', amount: 100, currency: 'USD', category: 'Food', description: '', ...overrides });
 const convert = ({ amount, currency }) => currency === 'KRW' ? amount / 1000 : currency === 'EUR' ? null : amount;
@@ -19,4 +19,15 @@ test('stacks actual linked scheduled payments and all other expenses without omi
 
 test('flags missing conversion rates rather than offering incomplete recommendations', () => {
   assert.equal(recommendBudgets([entry({ currency: 'EUR' })], '2026-01', convert).missingRates, true);
+});
+
+test('does not count scheduled transactions toward category over-limit totals', () => {
+  const entries = [
+    entry({ category: 'Food', amount: 120 }),
+    entry({ category: 'Food', amount: 400, plannedExpenseId: 'rent', countsTowardMonthlyBudget: true }),
+    entry({ category: 'Shopping', amount: 150 }),
+  ];
+  assert.deepEqual(calculateOverBudgetCategories(entries, ['Food', 'Shopping'], { Food: 100, Shopping: 200 }, 1, convert), [
+    { category: 'Food', spent: 120, limit: 100, over: 20 },
+  ]);
 });

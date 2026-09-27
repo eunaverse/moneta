@@ -51,6 +51,14 @@ export type RecurringExpense = {
   paidMonths?: string[];
 };
 
+export type FinancialGoal = {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline: string;
+};
+
 export type MonetaSnapshot = {
   version: 2;
   data: BudgetState;
@@ -61,4 +69,5 @@ export type MonetaSnapshot = {
   categorySort: CategorySort;
   recurringExpenses: RecurringExpense[];
   insightMonths: number;
+  goals: FinancialGoal[];
 };
