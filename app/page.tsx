@@ -6,7 +6,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { MonetaAuthGate, type MonetaAccount } from "../components/moneta-auth-gate";
 import { addMonths, calculatePlanningCapacity, flexibleSpendRemaining, isDueInMonth, isPaidInMonth, monthIndex } from "../lib/budget-calculations";
 import { createReceiptUrls, loadMonetaState, MonetaStateConflictError, removeReceipt, saveMonetaState, subscribeMonetaState, uploadReceipt, type MonetaStateRecord } from "../lib/moneta-repository";
-import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, isRestorableSnapshot, migrateLegacyAssetRecord, normalizeSnapshot, supportedCurrencyCode, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
+import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, incorporateImportedCategories, isRestorableSnapshot, migrateLegacyAssetRecord, normalizeSnapshot, supportedCurrencyCode, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
 import { calculateOverBudgetCategories, recommendBudgets, summarizeSpending } from "../lib/spending-summary";
 import { isE2EMode } from "../lib/e2e-mode";
 import type { AssetBalance, BudgetState, CategorySort, FinancialGoal, LedgerAllocation, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "../lib/moneta-types";
@@ -1532,6 +1532,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       const imported: unknown = JSON.parse(await file.text());
       if (!isRestorableSnapshot(imported)) throw new Error("Invalid Moneta backup");
       applySnapshot(imported);
+      setSyncStatus("saved");
       setSyncMessage("Backup restored. Changes will sync automatically.");
     } catch {
       setSyncStatus("error");
@@ -1575,8 +1576,12 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       const type = row[typeIndex]?.toLowerCase() === "income" ? "income" : "expense";
       return [{ id: `csv-${Date.now()}-${index}`, date, type, category: row[categoryIndex] || (type === "income" ? incomeCategories[0] : expenseCategories[0]), description: row[descriptionIndex] || "Imported transaction", amount, currency: supportedCurrencyCode(row[currencyIndex], data.displayCurrency), countsTowardMonthlyBudget: type === "expense" } as LedgerEntry];
     });
-    setEntries((current) => [...importedEntries, ...current]);
-    setSyncMessage(`${importedEntries.length} transactions imported from CSV.`);
+    const incorporated = incorporateImportedCategories(importedEntries, expenseCategories, budgetCategories, incomeCategories);
+    setEntries((current) => [...incorporated.entries, ...current]);
+    setExpenseCategories(incorporated.expenseCategories);
+    setBudgetCategories(incorporated.budgetCategories);
+    setSyncStatus("saved");
+    setSyncMessage(`${incorporated.entries.length} transactions imported from CSV.`);
   };
   const addGoal = (event: React.FormEvent) => {
     event.preventDefault();

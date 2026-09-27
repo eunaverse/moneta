@@ -125,8 +125,9 @@ test("rejects invalid JSON and keeps an unusable CSV currency from breaking tran
   await page.locator('input[type="file"][accept*="json"]').setInputFiles({
     name: "notes.json",
     mimeType: "application/json",
-    buffer: Buffer.from(JSON.stringify([{ name: "not a backup" }])),
+    buffer: Buffer.from(JSON.stringify({ data: {}, entries: [] })),
   });
+  await expect(page.getByRole("alert")).toContainText("Sync paused");
   await expect(page.getByRole("alert")).toContainText("This backup could not be restored");
   await openPrimaryView(page, "Overview");
   await expect(page.getByText("$10,000", { exact: true }).first()).toBeVisible();
@@ -135,11 +136,22 @@ test("rejects invalid JSON and keeps an unusable CSV currency from breaking tran
   await page.locator('input[type="file"][accept*="csv"]').setInputFiles({
     name: "activity.csv",
     mimeType: "text/csv",
-    buffer: Buffer.from(`date,amount,description,currency\n${month}-02,12.50,Coffee,US$\n`),
+    buffer: Buffer.from(`date,amount,description,currency,category\n${month}-02,12.50,Coffee,US$,식비\n${month}-03,8.00,Leash,USD,Pet care\n`),
   });
+  await expect(page.getByRole("status")).toContainText("2 transactions imported from CSV.");
+  await expect(page.getByRole("alert").filter({ hasText: "Sync paused" })).toHaveCount(0);
   await openPrimaryView(page, "Transactions");
-  await expect(page.getByText("Coffee")).toBeVisible();
-  await expect(page.locator(".transaction-amount").first()).toContainText("$12.50");
+  const coffee = page.locator(".transaction-row").filter({ hasText: "Coffee" });
+  await expect(coffee).toContainText("Food");
+  await expect(coffee).toContainText("$12.50");
+  await expect(coffee).not.toContainText("식비");
+  await expect(page.locator(".transaction-row").filter({ hasText: "Leash" })).toContainText("Pet care");
+  await openPrimaryView(page, "Budget");
+  await expect(page.getByLabel("Food expected monthly budget")).toBeVisible();
+  await expect(page.getByLabel("Pet care expected monthly budget")).toBeVisible();
+  await openPrimaryView(page, "Insights");
+  await expect(page.locator(".over-limit-row").filter({ hasText: "Food" })).toBeVisible();
+  await expect(page.locator(".over-limit-row").filter({ hasText: "Pet care" })).toBeVisible();
 });
 
 test("creates and renames a category and exposes portable backup tools", async ({ page }) => {

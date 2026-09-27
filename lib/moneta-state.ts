@@ -53,15 +53,57 @@ export function supportedCurrencyCode(value: unknown, fallback = "USD") {
   return currencyCode(value, fallback);
 }
 
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
 export function isRestorableSnapshot(value: unknown): value is StoredMonetaSnapshot {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const snapshot = value as Record<string, unknown>;
-  const data = snapshot.data;
-  return typeof data === "object" && data !== null && !Array.isArray(data) && Array.isArray(snapshot.entries);
+  if (!isPlainRecord(value) || !isPlainRecord(value.data) || !Array.isArray(value.entries)) return false;
+  if (typeof value.version !== "number" || !Number.isFinite(value.version) || value.version < 1) return false;
+  const hasAssets = Array.isArray(value.data.assets) || LEGACY_ASSET_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(value.data, field));
+  const hasPlanMonths = /^\d{4}-\d{2}$/.test(String(value.data.planningStartMonth || "")) && /^\d{4}-\d{2}$/.test(String(value.data.planningEndMonth || ""));
+  const budgets = value.monthlyBudgets;
+  return hasAssets
+    && hasPlanMonths
+    && Array.isArray(value.expenseCategories)
+    && value.expenseCategories.length > 0
+    && isPlainRecord(budgets)
+    && Array.isArray(value.budgetCategories)
+    && Array.isArray(value.recurringExpenses);
 }
 
 const validMonth = (value: unknown) => /^\d{4}-\d{2}$/.test(String(value || ""));
 const migrateCategory = (value: string) => CATEGORY_MIGRATION[value] || value;
+const sameCategory = (left: string, right: string) => left.localeCompare(right, undefined, { sensitivity: "accent" }) === 0;
+
+const resolveImportedCategory = (
+  raw: string,
+  type: "expense" | "income",
+  expenseCategories: readonly string[],
+  incomeCategories: readonly string[],
+) => {
+  const migrated = migrateCategory(String(raw || "").trim());
+  if (!migrated) return "";
+  const list = type === "income" ? incomeCategories : expenseCategories;
+  return list.find((category) => sameCategory(category, migrated)) ?? migrated;
+};
+
+export function incorporateImportedCategories<T extends { type: "expense" | "income"; category: string; countsTowardMonthlyBudget?: boolean }>(
+  imported: readonly T[],
+  expenseCategories: readonly string[],
+  budgetCategories: readonly string[],
+  incomeCategories: readonly string[],
+): { entries: T[]; expenseCategories: string[]; budgetCategories: string[] } {
+  const expenses = [...expenseCategories];
+  const budgets = [...budgetCategories];
+  const entries = imported.map((entry) => {
+    const resolved = resolveImportedCategory(entry.category, entry.type, expenses, incomeCategories);
+    if (entry.type !== "expense" || !resolved) return { ...entry, category: resolved || entry.category.trim() };
+    if (!expenses.some((category) => sameCategory(category, resolved))) expenses.push(resolved);
+    const canonical = expenses.find((category) => sameCategory(category, resolved)) ?? resolved;
+    if (entry.countsTowardMonthlyBudget !== false && !budgets.some((category) => sameCategory(category, canonical))) budgets.push(canonical);
+    return { ...entry, category: canonical };
+  });
+  return { entries, expenseCategories: expenses, budgetCategories: budgets };
+}
 
 export const needsLegacyAssetMigration = (snapshot: StoredMonetaSnapshot) => {
   const storedData = snapshot.data;
