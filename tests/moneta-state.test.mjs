@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDefaultSnapshot,
+  incorporateImportedCategories,
+  isRestorableSnapshot,
   migrateLegacyAssetRecord,
   normalizeSnapshot,
+  supportedCurrencyCode,
   toDisplayAmount,
 } from "../lib/moneta-state.ts";
 
@@ -312,6 +315,50 @@ test("normalization drops a corrupted receipt allocation instead of distorting c
   }), "2026-08");
 
   assert.equal(normalized.entries[0].allocations, undefined);
+});
+
+test("rejects JSON that is not a Moneta snapshot before normalization can blank the plan", () => {
+  assert.equal(isRestorableSnapshot([]), false);
+  assert.equal(isRestorableSnapshot(42), false);
+  assert.equal(isRestorableSnapshot("backup"), false);
+  assert.equal(isRestorableSnapshot(null), false);
+  assert.equal(isRestorableSnapshot(true), false);
+  assert.equal(isRestorableSnapshot({ name: "not moneta" }), false);
+  assert.equal(isRestorableSnapshot({ data: { displayCurrency: "USD" } }), false);
+  assert.equal(isRestorableSnapshot({ entries: [] }), false);
+  assert.equal(isRestorableSnapshot({ data: {}, entries: [] }), false);
+  assert.equal(isRestorableSnapshot({ version: 2, data: {}, entries: [] }), false);
+  assert.equal(isRestorableSnapshot({ version: 2, data: { assets: [] }, entries: [] }), false);
+  assert.equal(isRestorableSnapshot(legacySnapshot()), true);
+  assert.equal(isRestorableSnapshot(createDefaultSnapshot("2026-08")), true);
+  assert.equal(normalizeSnapshot([]).data.assets.length, 0);
+  assert.equal(normalizeSnapshot({ name: "not moneta" }).entries.length, 0);
+  assert.deepEqual(normalizeSnapshot({ data: {}, entries: [] }, "2026-08").data.assets, []);
+  assert.deepEqual(normalizeSnapshot({ data: {}, entries: [] }, "2026-08").monthlyBudgets, {});
+});
+
+test("imported categories join the expense and budget lists under canonical names", () => {
+  const incomeCategories = ["Salary", "Bonus", "Investment", "Refund", "Other income"];
+  const result = incorporateImportedCategories([
+    { type: "expense", category: " 식비 ", countsTowardMonthlyBudget: true },
+    { type: "expense", category: "pet care", countsTowardMonthlyBudget: true },
+    { type: "expense", category: "Pet care", countsTowardMonthlyBudget: true },
+    { type: "expense", category: "FOOD", countsTowardMonthlyBudget: true },
+    { type: "income", category: "급여" },
+    { type: "expense", category: "Tuition", countsTowardMonthlyBudget: false },
+  ], ["Housing", "Food"], ["Housing"], incomeCategories);
+
+  assert.deepEqual(result.entries.map((entry) => entry.category), ["Food", "pet care", "pet care", "Food", "Salary", "Tuition"]);
+  assert.deepEqual(result.expenseCategories, ["Housing", "Food", "pet care", "Tuition"]);
+  assert.deepEqual(result.budgetCategories, ["Housing", "Food", "pet care"]);
+});
+
+test("keeps only real currency codes from optional CSV values", () => {
+  assert.equal(supportedCurrencyCode("usd", "EUR"), "USD");
+  assert.equal(supportedCurrencyCode(" krw ", "EUR"), "KRW");
+  assert.equal(supportedCurrencyCode("US$", "EUR"), "EUR");
+  assert.equal(supportedCurrencyCode("dollars", "EUR"), "EUR");
+  assert.equal(supportedCurrencyCode("", "KRW"), "KRW");
 });
 
 test("normalization preserves valid savings goals and clamps progress to the target", () => {

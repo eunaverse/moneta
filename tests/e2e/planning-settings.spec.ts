@@ -89,6 +89,71 @@ test("edits assets, the fixed plan period, and insights period", async ({ page }
   await expect(page.locator(".insights-empty-state")).toContainText("No spending yet");
 });
 
+test("net worth bars follow the review lookback and the insights summary uses one column", async ({ page }) => {
+  await page.getByRole("button", { name: "Edit assets" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("Checking");
+  await dialog.getByLabel("Asset 1 amount").fill("8000");
+  await dialog.getByRole("button", { name: "Save balances" }).click();
+
+  await openPrimaryView(page, "Transactions");
+  const form = page.locator(".transaction-form");
+  await form.getByRole("button", { name: "Enter manually" }).click();
+  await form.getByLabel("Description").fill("Coffee");
+  await form.getByLabel("Amount").fill("12");
+  await form.getByRole("button", { name: /Save transaction/ }).click();
+
+  await openPrimaryView(page, "Insights");
+  const lookback = page.locator(".insight-range-controls").getByRole("spinbutton");
+  await lookback.fill("3");
+  await expect(page.locator(".net-worth-bars > div")).toHaveCount(3);
+  await expect.poll(() => page.locator(".net-worth-bars").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)).toBe(3);
+  await expect.poll(() => page.locator(".insights-page .insight-action-card").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)).toBe(1);
+});
+
+test("rejects invalid JSON and keeps an unusable CSV currency from breaking transactions", async ({ page }) => {
+  await page.getByRole("button", { name: "Edit assets" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("Checking");
+  await dialog.getByLabel("Asset 1 amount").fill("10000");
+  await dialog.getByRole("button", { name: "Save balances" }).click();
+
+  await openPrimaryView(page, "Settings");
+  const month = await page.getByLabel("Planning start month").inputValue();
+  await page.locator('input[type="file"][accept*="json"]').setInputFiles({
+    name: "notes.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ data: {}, entries: [] })),
+  });
+  await expect(page.getByRole("alert")).toContainText("Sync paused");
+  await expect(page.getByRole("alert")).toContainText("This backup could not be restored");
+  await openPrimaryView(page, "Overview");
+  await expect(page.getByText("$10,000", { exact: true }).first()).toBeVisible();
+
+  await openPrimaryView(page, "Settings");
+  await page.locator('input[type="file"][accept*="csv"]').setInputFiles({
+    name: "activity.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(`date,amount,description,currency,category\n${month}-02,12.50,Coffee,US$,식비\n${month}-03,8.00,Leash,USD,Pet care\n`),
+  });
+  await expect(page.getByRole("status")).toContainText("2 transactions imported from CSV.");
+  await expect(page.getByRole("alert").filter({ hasText: "Sync paused" })).toHaveCount(0);
+  await openPrimaryView(page, "Transactions");
+  const coffee = page.locator(".transaction-row").filter({ hasText: "Coffee" });
+  await expect(coffee).toContainText("Food");
+  await expect(coffee).toContainText("$12.50");
+  await expect(coffee).not.toContainText("식비");
+  await expect(page.locator(".transaction-row").filter({ hasText: "Leash" })).toContainText("Pet care");
+  await openPrimaryView(page, "Budget");
+  await expect(page.getByLabel("Food expected monthly budget")).toBeVisible();
+  await expect(page.getByLabel("Pet care expected monthly budget")).toBeVisible();
+  await openPrimaryView(page, "Insights");
+  await expect(page.locator(".over-limit-row").filter({ hasText: "Food" })).toBeVisible();
+  await expect(page.locator(".over-limit-row").filter({ hasText: "Pet care" })).toBeVisible();
+});
+
 test("creates and renames a category and exposes portable backup tools", async ({ page }) => {
   await openPrimaryView(page, "Settings");
   await page.getByRole("button", { name: /Manage/ }).click();

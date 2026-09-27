@@ -48,6 +48,13 @@ export const isDueInMonth = (expense: RecurringExpense, month: string) => {
 
 export const isPaidInMonth = (expense: RecurringExpense, month: string) => expense.paidMonths?.includes(month) ?? false;
 
+export function flexibleSpendRemaining(suggestedMonthlySpending: number, flexibleSpentThisMonth: number, remainingMonths: number) {
+  const suggested = Number.isFinite(suggestedMonthlySpending) ? Math.max(0, suggestedMonthlySpending) : 0;
+  const spent = Number.isFinite(flexibleSpentThisMonth) ? Math.max(0, flexibleSpentThisMonth) : 0;
+  if (!(remainingMonths > 0)) return 0;
+  return Math.max(0, suggested - spent + spent / remainingMonths);
+}
+
 export function calculatePlanningCapacity({
   currentNetWorth,
   recurringExpenses,

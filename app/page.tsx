@@ -4,9 +4,9 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { MonetaAuthGate, type MonetaAccount } from "../components/moneta-auth-gate";
-import { addMonths, calculatePlanningCapacity, isDueInMonth, isPaidInMonth, monthIndex } from "../lib/budget-calculations";
+import { addMonths, calculatePlanningCapacity, flexibleSpendRemaining, isDueInMonth, isPaidInMonth, monthIndex } from "../lib/budget-calculations";
 import { createReceiptUrls, loadMonetaState, MonetaStateConflictError, removeReceipt, saveMonetaState, subscribeMonetaState, uploadReceipt, type MonetaStateRecord } from "../lib/moneta-repository";
-import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, migrateLegacyAssetRecord, normalizeSnapshot, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
+import { createDefaultSnapshot, DEFAULT_EXPENSE_CATEGORIES, incorporateImportedCategories, isRestorableSnapshot, migrateLegacyAssetRecord, normalizeSnapshot, supportedCurrencyCode, toDisplayAmount, type StoredMonetaSnapshot } from "../lib/moneta-state";
 import { calculateOverBudgetCategories, recommendBudgets, summarizeSpending } from "../lib/spending-summary";
 import { isE2EMode } from "../lib/e2e-mode";
 import type { AssetBalance, BudgetState, CategorySort, FinancialGoal, LedgerAllocation, LedgerEntry, MonetaSnapshot, MonthlyBudgets, RecurringExpense } from "../lib/moneta-types";
@@ -745,7 +745,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       || entries.some((entry) => entry.amount > 0)
       || Object.values(monthlyBudgets).some((amount) => amount > 0)
       || recurringExpenses.some((item) => item.amount > 0)
-      || data.monthlyIncome > 0;
+      || data.monthlyIncome > 0
+      || goals.some((goal) => goal.targetAmount > 0 || goal.currentAmount > 0);
     if (!hasMoney) {
       setData((current) => ({ ...current, displayCurrency: nextCurrency, exchangeRates: {} }));
       setDraft((current) => ({ ...current, currency: nextCurrency }));
@@ -772,6 +773,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     }));
     setMonthlyBudgets((current) => Object.fromEntries(Object.entries(current).map(([category, amount]) => [category, amount * unitsOfNextPerCurrent])));
     setRecurringExpenses((current) => current.map((item) => ({ ...item, amount: item.amount * unitsOfNextPerCurrent })));
+    setGoals((current) => current.map((goal) => ({ ...goal, targetAmount: goal.targetAmount * unitsOfNextPerCurrent, currentAmount: goal.currentAmount * unitsOfNextPerCurrent })));
     setWhatIf((current) => ({ oneTime: current.oneTime * unitsOfNextPerCurrent, monthlyChange: current.monthlyChange * unitsOfNextPerCurrent }));
     setDraft((current) => ({ ...current, currency: current.currency === data.displayCurrency ? nextCurrency : current.currency }));
   };
@@ -866,7 +868,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
   const overdueScheduledSummary = `${overdueScheduledNames.slice(0, 3).join(" · ")}${overdueScheduledNames.length > 3 ? ` · +${overdueScheduledNames.length - 3} more` : ""}`;
   const monthlyLivingBudget = monthlyBudgetTotal;
   const monthlyLivingMoneyAvailable = planningCapacity.suggestedMonthlySpending;
-  const currentMonthRemaining = Math.max(0, monthlyLivingMoneyAvailable - currentMonthFlexibleSpent);
+  const currentMonthRemaining = flexibleSpendRemaining(monthlyLivingMoneyAvailable, currentMonthFlexibleSpent, remainingPlanningMonths);
   const monthlyBudgetAbovePlanSafe = Math.max(0, monthlyLivingBudget - monthlyLivingMoneyAvailable);
   const scheduledCapacityRows: CalculationRow[] = planningCapacity.scheduledPayments.length > 0
     ? planningCapacity.scheduledPayments.map((item) => ({
@@ -1529,8 +1531,10 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     event.target.value = "";
     if (!file) return;
     try {
-      const imported = JSON.parse(await file.text()) as StoredMonetaSnapshot;
+      const imported: unknown = JSON.parse(await file.text());
+      if (!isRestorableSnapshot(imported)) throw new Error("Invalid Moneta backup");
       applySnapshot(imported);
+      setSyncStatus("saved");
       setSyncMessage("Backup restored. Changes will sync automatically.");
     } catch {
       setSyncStatus("error");
@@ -1572,10 +1576,14 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       const amount = Number(String(row[amountIndex] || "").replace(/[$,]/g, ""));
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(amount) || amount <= 0) return [];
       const type = row[typeIndex]?.toLowerCase() === "income" ? "income" : "expense";
-      return [{ id: `csv-${Date.now()}-${index}`, date, type, category: row[categoryIndex] || (type === "income" ? incomeCategories[0] : expenseCategories[0]), description: row[descriptionIndex] || "Imported transaction", amount, currency: row[currencyIndex]?.toUpperCase() || data.displayCurrency, countsTowardMonthlyBudget: type === "expense" } as LedgerEntry];
+      return [{ id: `csv-${Date.now()}-${index}`, date, type, category: row[categoryIndex] || (type === "income" ? incomeCategories[0] : expenseCategories[0]), description: row[descriptionIndex] || "Imported transaction", amount, currency: supportedCurrencyCode(row[currencyIndex], data.displayCurrency), countsTowardMonthlyBudget: type === "expense" } as LedgerEntry];
     });
-    setEntries((current) => [...importedEntries, ...current]);
-    setSyncMessage(`${importedEntries.length} transactions imported from CSV.`);
+    const incorporated = incorporateImportedCategories(importedEntries, expenseCategories, budgetCategories, incomeCategories);
+    setEntries((current) => [...incorporated.entries, ...current]);
+    setExpenseCategories(incorporated.expenseCategories);
+    setBudgetCategories(incorporated.budgetCategories);
+    setSyncStatus("saved");
+    setSyncMessage(`${incorporated.entries.length} transactions imported from CSV.`);
   };
   const addGoal = (event: React.FormEvent) => {
     event.preventDefault();
@@ -1906,7 +1914,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
               <div><div className="insight-plan-kicker"><span>SAFE MONTHLY SPEND</span><small>CURRENT PLAN TARGET</small><small>AS OF {currentMonth}</small></div><CalculationValue className="insight-target-number" label="Safe monthly spend" value={money.format(suggestedMonthlyBudget)} formula={planningFormula} rows={capacityCalculationRows} note={`Live plan as of ${currentMonth}. The analysis range above does not change this target.`} align="left" /><small>{remainingPlanningMonths > 0 ? `${money.format(planningCapacity.availableToSpread)} available through ${data.planningEndMonth} ÷ ${remainingPlanningMonths} months` : "Choose a new period in Plan setup."}</small></div>
             </article>
             <div className="visual-insights-grid single"><article className="trend-card"><div className="card-heading"><div><span>{insightPeriodMonths} MONTHS</span><h2>Spending trend</h2></div><strong>{money.format(monthlyBudgetTotal)}<small>/ month category budget</small></strong></div><div className="trend-legend"><span><i className="scheduled-dot" />Scheduled payments</span><span><i className="budget-dot" />Flexible spending</span></div><p className="trend-note">Actual spending only. Scheduled payments are linked transactions; flexible spending includes all other expenses.</p><div className="trend-scroll"><div className={`trend-bars ${insightPeriodMonths > 12 ? "compact" : ""}`} style={{ gridTemplateColumns: `repeat(${insightPeriodMonths}, minmax(0, 1fr))` }}>{spendingTrend.map((item, index) => <div key={item.month} title={`${item.month} · Scheduled payments ${moneyDetailed.format(item.scheduled)} · Flexible spending ${moneyDetailed.format(item.flexible)}`} aria-label={`${item.month}, Total ${moneyDetailed.format(item.amount)}, Scheduled payments ${moneyDetailed.format(item.scheduled)}, Flexible spending ${moneyDetailed.format(item.flexible)}`}>{insightPeriodMonths <= 12 && <span>{money.format(item.amount)}</span>}<div className="trend-bar-values"><small>{moneyDetailed.format(item.scheduled)} scheduled</small><small>{moneyDetailed.format(item.flexible)} flexible</small></div><div className="trend-stack" style={{ height: `${item.amount / trendMax * 100}%` }} aria-hidden="true"><i className="trend-scheduled" style={{ height: `${item.amount > 0 ? item.scheduled / item.amount * 100 : 0}%` }} /><i className="trend-flexible" style={{ height: `${item.amount > 0 ? item.flexible / item.amount * 100 : 0}%` }} /></div><b>{insightPeriodMonths > 12 ? (index % 3 === 0 || index === spendingTrend.length - 1 ? item.month.slice(2).replace("-", "·") : "") : insightPeriodMonths > 6 ? item.month.slice(2).replace("-", "·") : item.month.slice(5)}</b></div>)}</div></div></article></div>
-            <article className="net-worth-trend-card"><div className="card-heading"><div><span>RECORDED BALANCE TREND</span><h2>Net worth over time</h2></div><strong>{money.format(result.total)}<small>current estimate</small></strong></div><p className="trend-note">Estimated from current assets and recorded income and expenses. It does not include unrecorded account changes.</p><div className="net-worth-bars">{netWorthTrend.map((item) => <div key={item.month} title={`${item.month} · ${moneyDetailed.format(item.amount)}`}><i style={{ height: `${Math.max(4, (item.amount - netWorthMin) / Math.max(1, netWorthMax - netWorthMin) * 100)}%` }} /><b>{item.month.slice(5)}</b></div>)}</div></article>
+            <article className="net-worth-trend-card"><div className="card-heading"><div><span>RECORDED BALANCE TREND</span><h2>Net worth over time</h2></div><strong>{money.format(result.total)}<small>current estimate</small></strong></div><p className="trend-note">Estimated from current assets and recorded income and expenses. It does not include unrecorded account changes.</p><div className="net-worth-bars" style={{ gridTemplateColumns: `repeat(${insightPeriodMonths}, minmax(0, 1fr))` }}>{netWorthTrend.map((item) => <div key={item.month} title={`${item.month} · ${moneyDetailed.format(item.amount)}`}><i style={{ height: `${Math.max(4, (item.amount - netWorthMin) / Math.max(1, netWorthMax - netWorthMin) * 100)}%` }} /><b>{item.month.slice(5)}</b></div>)}</div></article>
             <article className="over-limit-panel"><div className="card-heading"><div><span>PERIOD LIMITS</span><h2>Over by category</h2></div><strong>{money.format(totalOverBudget)}</strong></div>{overBudgetCategories.length === 0 ? <div className="visual-empty">No category exceeded its expected budget in this period.</div> : overBudgetCategories.slice(0, overLimitLimit).map((item) => <div className="over-limit-row" key={item.category}><span>{item.category}<small>{money.format(item.spent)} / {money.format(item.limit)}</small></span><div><i style={{ width: `${item.over / maxCategoryOverage * 100}%` }} /></div><strong>+{money.format(item.over)}</strong></div>)}<LoadMore shown={overLimitLimit} total={overBudgetCategories.length} step={5} onLoad={() => setOverLimitLimit((current) => current + 5)} /></article>
           </>}
         </div>}
