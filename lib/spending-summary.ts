@@ -2,6 +2,29 @@ import type { LedgerEntry } from './moneta-types';
 
 type Convert = (entry: Pick<LedgerEntry, 'amount' | 'currency'>) => number | null;
 
+export type CategoryBudgetTotal = { category: string; spent: number; limit: number; over: number };
+
+export function calculateOverBudgetCategories(
+  entries: LedgerEntry[],
+  categories: string[],
+  monthlyBudgets: Record<string, number>,
+  months: number,
+  convert: Convert,
+): CategoryBudgetTotal[] {
+  return categories.map((category) => {
+    const spent = entries
+      .filter((entry) => entry.type === 'expense' && !entry.plannedExpenseId && entry.countsTowardMonthlyBudget !== false)
+      .reduce((sum, entry) => sum + entryAllocations(entry).filter((allocation) => allocation.category === category)
+        .reduce((allocationSum, allocation) => allocationSum + (convert({ amount: allocation.amount, currency: entry.currency }) ?? 0), 0), 0);
+    const limit = (monthlyBudgets[category] ?? 0) * months;
+    return { category, spent, limit, over: Math.max(0, spent - limit) };
+  }).filter((item) => item.over > 0).sort((first, second) => second.over - first.over);
+}
+
+function entryAllocations(entry: LedgerEntry) {
+  return entry.allocations?.length ? entry.allocations : [{ category: entry.category, amount: entry.amount }];
+}
+
 export function summarizeSpending(entries: LedgerEntry[], month: string, convert: Convert) {
   let scheduled = 0;
   let flexible = 0;

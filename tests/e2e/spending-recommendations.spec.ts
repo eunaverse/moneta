@@ -17,6 +17,10 @@ test('applies last month spending explicitly and shows separate actual spending 
   await expect(page.getByLabel('Food expected monthly budget')).toHaveValue('');
   await page.getByRole('button', { name: 'Use Food recommendation: $123.45' }).click();
   await expect(page.getByLabel('Food expected monthly budget')).toHaveValue('123.45');
+  await expect(page.getByRole('button', { name: 'Apply all recommendations' })).toBeVisible();
+  await page.getByLabel('Food expected monthly budget').fill('1');
+  await page.getByRole('button', { name: 'Apply all recommendations' }).click();
+  await expect(page.getByLabel('Food expected monthly budget')).toHaveValue('123.45');
   await page.getByLabel('VIEW MONTH').fill('2026-11');
   await expect(page.locator('.budget-recommendations')).toContainText('No eligible spending');
   await page.getByLabel('VIEW MONTH').fill('2026-08');
@@ -37,6 +41,10 @@ test('applies last month spending explicitly and shows separate actual spending 
   await page.getByLabel('Analysis through month').fill('2026-08');
   const bar = page.locator('.trend-bars > div').last();
   await expect(bar).toHaveAttribute('aria-label', /Scheduled payments \$400.00.*Flexible spending \$123.45/);
+  await expect(bar.locator('.trend-bar-values')).toContainText('$400.00 scheduled');
+  await expect(bar.locator('.trend-bar-values')).toContainText('$123.45 flexible');
+  await expect(page.locator('.insight-kpis')).toHaveCount(0);
+  await expect(page.locator('.insight-action-copy')).toHaveCount(0);
   await expect(bar.locator('.trend-scheduled')).toBeVisible();
   await expect(bar.locator('.trend-flexible')).toBeVisible();
   expect(await bar.locator('.trend-scheduled').evaluate(el => getComputedStyle(el).backgroundColor)).not.toEqual(await bar.locator('.trend-flexible').evaluate(el => getComputedStyle(el).backgroundColor));

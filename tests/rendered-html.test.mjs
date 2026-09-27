@@ -200,7 +200,17 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(stateModel, /assets: \[\]/);
   assert.match(stateModel, /monthlyBudgets: \{\}/);
   assert.match(stateModel, /toDisplayAmount/);
-  assert.doesNotMatch(page, /Export or import|importBackup|accept="application\/json/);
+  assert.match(page, /Restore JSON/);
+  assert.match(page, /Import CSV/);
+  assert.match(page, /if \(!isRestorableSnapshot\(imported\)\) throw new Error\("Invalid Moneta backup"\)/);
+  assert.match(page, /applySnapshot\(imported\);\s*setSyncStatus\("saved"\);\s*setSyncMessage\("Backup restored\. Changes will sync automatically\."\)/);
+  assert.match(page, /incorporateImportedCategories\(importedEntries, expenseCategories, budgetCategories, incomeCategories\)/);
+  assert.match(page, /setSyncStatus\("saved"\);\s*setSyncMessage\(`\$\{incorporated\.entries\.length\} transactions imported from CSV\.`\)/);
+  assert.match(page, /supportedCurrencyCode\(row\[currencyIndex\], data\.displayCurrency\)/);
+  assert.match(page, /flexibleSpendRemaining\(monthlyLivingMoneyAvailable, currentMonthFlexibleSpent, remainingPlanningMonths\)/);
+  assert.match(page, /className="net-worth-bars" style=\{\{ gridTemplateColumns: `repeat\(\$\{insightPeriodMonths\}, minmax\(0, 1fr\)\)` \}\}/);
+  assert.match(css, /\.insight-action-card \{ display: grid; grid-template-columns: minmax\(0, 1fr\);/);
+  assert.doesNotMatch(css, /\.net-worth-bars \{[^}]*grid-template-columns:/);
   assert.doesNotMatch(page, /krwPrimary|krwSecondary|krwEmergency|usdCash|data\.exchangeRate\b/);
   assert.match(page, />Scheduled payments<\/button>/);
   assert.match(page, /ADD PAYMENT/);

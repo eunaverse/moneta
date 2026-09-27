@@ -4,7 +4,7 @@ import { expectNoHorizontalOverflow, openApp, openPrimaryView } from "./helpers"
 
 test.beforeEach(async ({ page }) => openApp(page));
 
-test("new accounts use USD and no sample category budgets or import control", async ({ page }) => {
+test("new accounts use USD and no sample category budgets", async ({ page }) => {
   await openPrimaryView(page, "Budget");
   await expect(page.locator(".category-budget-empty")).toContainText("No category budgets");
   await expect(page.getByLabel("Housing expected monthly budget")).toHaveCount(0);
@@ -15,8 +15,9 @@ test("new accounts use USD and no sample category budgets or import control", as
   await page.getByRole("button", { name: "Download backup" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^moneta-backup-\d{4}-\d{2}-\d{2}\.json$/);
-  await expect(page.getByText(/Import/i)).toHaveCount(0);
-  await expect(page.locator('input[type="file"][accept*="json"]')).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Restore JSON" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import CSV" })).toBeVisible();
+  await expect(page.locator('input[type="file"][accept*="json"]')).toHaveCount(1);
 });
 
 test("migrates saved legacy balances to the current asset format once", async () => {
@@ -106,6 +107,38 @@ test("allows an empty account to choose another primary currency", async ({ page
   await openPrimaryView(page, "Settings");
   await page.getByLabel("Primary display currency").selectOption("EUR");
   await expect(page.getByText("€0 current net worth", { exact: true })).toBeVisible();
+});
+
+test("converts savings goals when the primary currency changes", async ({ page }) => {
+  await openPrimaryView(page, "Settings");
+  await page.getByLabel("Goal name").fill("Emergency fund");
+  await page.getByLabel("Goal target").fill("10000");
+  await page.getByLabel("Goal current amount").fill("2500");
+  await page.getByLabel("Goal deadline").fill("2030-12");
+  await page.getByRole("button", { name: "Add goal" }).click();
+  const goal = page.locator(".goal-list");
+  await expect(goal).toContainText("$2,500 / $10,000");
+  await expect(goal).toContainText("25%");
+
+  let blockedCurrencyMessage = "";
+  page.once("dialog", async (dialog) => {
+    blockedCurrencyMessage = dialog.message();
+    await dialog.accept();
+  });
+  await page.getByLabel("Primary display currency").selectOption("KRW");
+  expect(blockedCurrencyMessage).toContain("Add a positive KRW per USD exchange rate");
+  await expect(goal).toContainText("$2,500 / $10,000");
+  await expect(page.getByLabel("Primary display currency")).toHaveValue("USD");
+
+  await page.getByLabel("Exchange rate currency").selectOption("KRW");
+  await page.getByRole("button", { name: "Add rate" }).click();
+  await page.getByLabel("KRW per USD").fill("1400");
+  await page.getByLabel("Primary display currency").selectOption("KRW");
+
+  await expect(page.getByLabel("Primary display currency")).toHaveValue("KRW");
+  await expect(goal).toContainText("₩3,500,000 / ₩14,000,000");
+  await expect(goal).toContainText("25%");
+  await expect(page.getByLabel("Update Emergency fund")).toHaveValue("3,500,000");
 });
 
 test("asset and rate controls remain usable at a medium viewport", async ({ page }, testInfo) => {

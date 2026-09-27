@@ -45,6 +45,50 @@ test("overview explains category-budget math without an outside-budget total", a
   await expect(budgetCard).not.toContainText("Outside category budgets");
 });
 
+test("remaining flexible money does not subtract this month's spending twice", async ({ page }) => {
+  await page.getByRole("button", { name: "Edit assets" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("Checking");
+  await dialog.getByLabel("Asset 1 amount").fill("10000");
+  await dialog.getByRole("button", { name: "Save balances" }).click();
+
+  await openPrimaryView(page, "Settings");
+  const start = await page.getByLabel("Planning start month").inputValue();
+  const [year, month] = start.split("-").map(Number);
+  const endIndex = year * 12 + month;
+  const end = `${Math.floor(endIndex / 12)}-${String((endIndex % 12) + 1).padStart(2, "0")}`;
+  await page.getByLabel("Planning end month").fill(end);
+
+  await openPrimaryView(page, "Transactions");
+  const form = page.locator(".transaction-form");
+  await form.getByRole("button", { name: "Enter manually" }).click();
+  await form.getByLabel("Description").fill("Groceries");
+  await form.getByLabel("Amount").fill("1000");
+  await form.getByRole("button", { name: /Save transaction/ }).click();
+
+  await openPrimaryView(page, "Overview");
+  const remaining = page.locator(".monthly-decision-values > div").last();
+  await expect(remaining).toContainText("Remaining");
+  await expect(remaining).toContainText("$4,000");
+  await expect(page.locator(".monthly-decision-values")).toContainText("$4,500");
+});
+
+test("overview shows the current-month decision summary", async ({ page }) => {
+  await page.getByRole("button", { name: "Edit assets" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("Checking");
+  await dialog.getByLabel("Asset 1 amount").fill("1000");
+  await dialog.getByRole("button", { name: "Save balances" }).click();
+  const summary = page.locator(".monthly-decision-card");
+  await expect(summary).toBeVisible();
+  await expect(summary).toContainText("Available to spend");
+  await expect(summary).toContainText("Flexible spent");
+  await expect(summary).toContainText("Scheduled spent");
+  await expect(summary).toContainText("Remaining");
+});
+
 test("empty planning screens show the next action and preview future insights", async ({ page }) => {
   await openPrimaryView(page, "Budget");
   await expect(page.locator(".category-budget-empty")).toContainText("No category budgets");
@@ -57,7 +101,6 @@ test("empty planning screens show the next action and preview future insights", 
   await expect(emptyState.getByRole("button", { name: "Add transaction" })).toBeVisible();
   const preview = page.locator(".insights-preview");
   await expect(preview).toContainText("Spending trend");
-  await expect(preview).toContainText("Top category");
   await expect(preview).toContainText("Budget alerts");
   await expect(preview).toContainText("After your first expense");
   await expect(page.locator(".trend-card, .insight-kpis, .over-limit-panel")).toHaveCount(0);
@@ -96,7 +139,7 @@ test("mobile workspaces keep full page names and readable supporting text", asyn
 
   await openPrimaryView(page, "Transactions");
   const currentPage = page.locator(".mobile-current-page");
-  await expect(currentPage).toHaveText("Transactions");
+  await expect(currentPage).toHaveText("Activity");
   expect(await currentPage.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
   for (const selector of [
