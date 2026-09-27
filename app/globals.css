@@ -1375,9 +1375,11 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .budget-recommendations { margin-bottom: 20px; padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }
 .budget-recommendations h2 { margin: 0; font-size: 18px; }
 .budget-recommendations p, .trend-note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.budget-recommendations .recommendation-source { margin: 6px 0 14px; font-size: 12px; }
+.budget-recommendations > p:not(.recommendation-source) { margin: 10px 0 0; }
 .recommendation-options { display: flex; flex-wrap: wrap; gap: 10px; }
 .recommendation-options button { max-width: 100%; white-space: normal; text-align: left; }
-.recommendation-options button span { display: block; margin-top: 4px; font-size: 12px; color: var(--purple); }
+.recommendation-options button { min-height: 38px; }
 .trend-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: 13px; }
 .trend-legend span { display: flex; align-items: center; gap: 7px; }
 .trend-legend i { width: 10px; height: 10px; border-radius: 3px; }
