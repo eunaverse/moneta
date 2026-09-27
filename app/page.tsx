@@ -745,7 +745,8 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
       || entries.some((entry) => entry.amount > 0)
       || Object.values(monthlyBudgets).some((amount) => amount > 0)
       || recurringExpenses.some((item) => item.amount > 0)
-      || data.monthlyIncome > 0;
+      || data.monthlyIncome > 0
+      || goals.some((goal) => goal.targetAmount > 0 || goal.currentAmount > 0);
     if (!hasMoney) {
       setData((current) => ({ ...current, displayCurrency: nextCurrency, exchangeRates: {} }));
       setDraft((current) => ({ ...current, currency: nextCurrency }));
@@ -772,6 +773,7 @@ function MonetaDashboard({ account }: { account: MonetaAccount }) {
     }));
     setMonthlyBudgets((current) => Object.fromEntries(Object.entries(current).map(([category, amount]) => [category, amount * unitsOfNextPerCurrent])));
     setRecurringExpenses((current) => current.map((item) => ({ ...item, amount: item.amount * unitsOfNextPerCurrent })));
+    setGoals((current) => current.map((goal) => ({ ...goal, targetAmount: goal.targetAmount * unitsOfNextPerCurrent, currentAmount: goal.currentAmount * unitsOfNextPerCurrent })));
     setWhatIf((current) => ({ oneTime: current.oneTime * unitsOfNextPerCurrent, monthlyChange: current.monthlyChange * unitsOfNextPerCurrent }));
     setDraft((current) => ({ ...current, currency: current.currency === data.displayCurrency ? nextCurrency : current.currency }));
   };

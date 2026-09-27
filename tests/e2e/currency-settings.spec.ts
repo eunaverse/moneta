@@ -108,6 +108,38 @@ test("allows an empty account to choose another primary currency", async ({ page
   await expect(page.getByText("€0 current net worth", { exact: true })).toBeVisible();
 });
 
+test("converts savings goals when the primary currency changes", async ({ page }) => {
+  await openPrimaryView(page, "Settings");
+  await page.getByLabel("Goal name").fill("Emergency fund");
+  await page.getByLabel("Goal target").fill("10000");
+  await page.getByLabel("Goal current amount").fill("2500");
+  await page.getByLabel("Goal deadline").fill("2030-12");
+  await page.getByRole("button", { name: "Add goal" }).click();
+  const goal = page.locator(".goal-list");
+  await expect(goal).toContainText("$2,500 / $10,000");
+  await expect(goal).toContainText("25%");
+
+  let blockedCurrencyMessage = "";
+  page.once("dialog", async (dialog) => {
+    blockedCurrencyMessage = dialog.message();
+    await dialog.accept();
+  });
+  await page.getByLabel("Primary display currency").selectOption("KRW");
+  expect(blockedCurrencyMessage).toContain("Add a positive KRW per USD exchange rate");
+  await expect(goal).toContainText("$2,500 / $10,000");
+  await expect(page.getByLabel("Primary display currency")).toHaveValue("USD");
+
+  await page.getByLabel("Exchange rate currency").selectOption("KRW");
+  await page.getByRole("button", { name: "Add rate" }).click();
+  await page.getByLabel("KRW per USD").fill("1400");
+  await page.getByLabel("Primary display currency").selectOption("KRW");
+
+  await expect(page.getByLabel("Primary display currency")).toHaveValue("KRW");
+  await expect(goal).toContainText("₩3,500,000 / ₩14,000,000");
+  await expect(goal).toContainText("25%");
+  await expect(page.getByLabel("Update Emergency fund")).toHaveValue("3,500,000");
+});
+
 test("asset and rate controls remain usable at a medium viewport", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name.includes("mobile"), "one medium-viewport pass is sufficient");
   await page.setViewportSize({ width: 768, height: 1024 });
