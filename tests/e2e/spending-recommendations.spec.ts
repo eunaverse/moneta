@@ -27,6 +27,7 @@ test('applies last month spending explicitly and shows separate actual spending 
   await schedule.getByLabel('First charge month').fill('2026-08');
   await schedule.getByRole('button', { name: /Add monthly payment/ }).click();
   await openPrimaryView(page, 'Transactions');
+  await form.getByRole('button', { name: 'Enter manually' }).click();
   await form.getByLabel('Count toward monthly budget').uncheck();
   await form.getByLabel('Link to a scheduled cost').check();
   await form.getByLabel('Scheduled payment').selectOption({ index: 1 });
