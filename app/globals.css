@@ -1401,6 +1401,7 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .scenario-note { font-size: 16px; line-height: 1.55; }
 
 .budget-recommendations { margin-bottom: 20px; padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }
+.budget-recommendations .recommendation-apply-all { display: inline-flex; }
 .budget-recommendations h2 { margin: 0; font-size: 18px; }
 .budget-recommendations p, .trend-note { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .budget-recommendations .recommendation-source { margin: 6px 0 14px; font-size: 12px; }

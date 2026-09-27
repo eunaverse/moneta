@@ -18,7 +18,9 @@ test('applies last month spending explicitly and shows separate actual spending 
   await page.getByRole('button', { name: 'Use Food recommendation: $123.45' }).click();
   await expect(page.getByLabel('Food expected monthly budget')).toHaveValue('123.45');
   await expect(page.getByRole('button', { name: 'Apply all recommendations' })).toBeVisible();
+  await page.getByLabel('Food expected monthly budget').fill('1');
   await page.getByRole('button', { name: 'Apply all recommendations' }).click();
+  await expect(page.getByLabel('Food expected monthly budget')).toHaveValue('123.45');
   await page.getByLabel('VIEW MONTH').fill('2026-11');
   await expect(page.locator('.budget-recommendations')).toContainText('No eligible spending');
   await page.getByLabel('VIEW MONTH').fill('2026-08');

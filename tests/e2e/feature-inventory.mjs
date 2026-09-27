@@ -1,6 +1,6 @@
 export const features = [
   { id: "previous-month-budget-recommendations", journey: "Apply category recommendations from the previous calendar month explicitly", spec: "tests/e2e/spending-recommendations.spec.ts" },
-  { id: "bulk-budget-recommendations", journey: "Apply all eligible monthly budget recommendations in one confirmed action", spec: "tests/e2e/spending-recommendations.spec.ts" },
+  { id: "bulk-budget-recommendations", journey: "Apply all eligible monthly budget recommendations on desktop and mobile and verify the updated limits", spec: "tests/e2e/spending-recommendations.spec.ts" },
   { id: "stacked-spending-trend", journey: "Read exact scheduled-payment and flexible-spending amounts separately and inspect category budget overruns", spec: "tests/e2e/spending-recommendations.spec.ts" },
   { id: "overview", journey: "See net worth, budget, and recent activity", spec: "tests/e2e/navigation-responsive.spec.ts" },
   { id: "overview-plan-outcome", journey: "See the safe monthly spending outcome before supporting account detail", spec: "tests/e2e/product-usability.spec.ts" },
