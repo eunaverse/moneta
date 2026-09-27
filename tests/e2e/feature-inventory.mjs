@@ -1,4 +1,6 @@
 export const features = [
+  { id: "previous-month-budget-recommendations", journey: "Apply category recommendations from the previous calendar month explicitly", spec: "tests/e2e/spending-recommendations.spec.ts" },
+  { id: "stacked-spending-trend", journey: "Distinguish actual scheduled payments from flexible spending in accessible stacked bars", spec: "tests/e2e/spending-recommendations.spec.ts" },
   { id: "overview", journey: "See net worth, budget, and recent activity", spec: "tests/e2e/navigation-responsive.spec.ts" },
   { id: "overview-plan-outcome", journey: "See the safe monthly spending outcome before supporting account detail", spec: "tests/e2e/product-usability.spec.ts" },
   { id: "overview-purpose-hierarchy", journey: "Keep safe monthly spend visually dominant while net worth remains supporting context", spec: "tests/e2e/overview-hierarchy.spec.ts" },

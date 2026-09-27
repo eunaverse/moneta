@@ -1180,6 +1180,8 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .calculation-value.align-right > .calculation-tooltip { right: 0; }
 .calculation-value.align-left > .calculation-tooltip { left: 0; }
 .calculation-value:hover > .calculation-tooltip, .calculation-value:focus > .calculation-tooltip, .calculation-value:focus-within > .calculation-tooltip { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+.calculation-value:hover > .calculation-tooltip { opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-4px); }
+.calculation-value:focus > .calculation-tooltip, .calculation-value:focus-within > .calculation-tooltip { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
 .calculation-tooltip-title { display: block !important; color: #fff !important; font-size: 13px !important; font-weight: 850 !important; letter-spacing: 0 !important; }
 .calculation-tooltip code { display: block; padding: 9px 10px; border-radius: 8px; background: #ffffff0d; color: #d9d2ff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; white-space: normal; }
 .calculation-rows { display: grid !important; gap: 0; border-top: 1px solid #ffffff17; }
@@ -1371,3 +1373,32 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .insights-empty-copy > p,
 .insights-preview-heading p,
 .scenario-note { font-size: 16px; line-height: 1.55; }
+
+.budget-recommendations { margin-bottom: 20px; padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }
+.budget-recommendations h2 { margin: 0; font-size: 18px; }
+.budget-recommendations p, .trend-note { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.budget-recommendations .recommendation-source { margin: 6px 0 14px; font-size: 12px; }
+.budget-recommendations > p:not(.recommendation-source) { margin: 10px 0 0; }
+.recommendation-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.recommendation-options button { max-width: 100%; white-space: normal; text-align: left; }
+.recommendation-options button { min-height: 38px; }
+.trend-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: 13px; }
+.trend-legend span { display: flex; align-items: center; gap: 7px; }
+.trend-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.trend-stack { width: min(30px, 70%); display: flex; flex-direction: column; overflow: hidden; border-radius: 6px 6px 0 0; flex-shrink: 1; }
+.trend-bars .trend-stack i { width: 100%; min-height: 0; border-radius: 0; flex-shrink: 0; }
+.trend-bars .trend-scheduled { background: var(--yellow); }
+.trend-bars .trend-flexible { background: var(--purple); }
+.trend-bars.compact .trend-stack { width: min(13px, 58%); }
+
+/* Keep advanced tools discoverable without competing with daily money tasks. */
+.sidebar nav button:nth-child(4), .mobile-drawer nav button:nth-child(4) { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.overview-budget-card .budget-breakdown, .overview-budget-card .clarity-note { display: none; }
+.overview-budget-card .budget-remaining { margin-bottom: 12px; }
+.trend-note { margin: 8px 0 0; font-size: 12px; }
+
+@media (max-width: 700px) {
+  .budget-capacity-section .capacity-plan-facts, .budget-month-values > div:nth-child(1) { display: none; }
+  .scenario-breakdown { display: none; }
+  .trend-note { display: none; }
+}
