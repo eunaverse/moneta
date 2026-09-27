@@ -110,7 +110,7 @@ test("mobile workspaces keep full page names and readable supporting text", asyn
 
   await openPrimaryView(page, "Transactions");
   const currentPage = page.locator(".mobile-current-page");
-  await expect(currentPage).toHaveText("Transactions");
+  await expect(currentPage).toHaveText("Activity");
   expect(await currentPage.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
   for (const selector of [

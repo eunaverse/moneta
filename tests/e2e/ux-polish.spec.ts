@@ -35,7 +35,7 @@ test("Korean interface preference translates the main workspace", async ({ page 
   await page.getByRole("button", { name: "한국어" }).click();
   await expect(page.getByRole("heading", { name: "설정", level: 1 })).toBeVisible();
   if (await page.getByRole("button", { name: "Open menu" }).isVisible()) await page.getByRole("button", { name: "Open menu" }).click();
-  await expect(page.getByRole("button", { name: /거래 내역/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /활동/ }).first()).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "설정", level: 1 })).toBeVisible();
 });

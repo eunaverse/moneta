@@ -42,7 +42,9 @@ test("plan setup separates calculation inputs from preferences and account contr
   const preferences = page.locator(".preference-settings-section");
   await expect(preferences).toContainText("Display & plan currency");
   await expect(preferences).toContainText("Navigation language");
-  await expect(preferences).toContainText("Download your data");
+  await expect(preferences).toContainText("Keep your data portable");
+  await expect(preferences).toContainText("Restore JSON");
+  await expect(preferences).toContainText("Import CSV");
   await expect(preferences).toContainText("ACCOUNT");
 
   const foundationBox = await foundation.boundingBox();

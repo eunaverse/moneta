@@ -4,7 +4,7 @@ import { expectNoHorizontalOverflow, openApp, openPrimaryView } from "./helpers"
 
 test.beforeEach(async ({ page }) => openApp(page));
 
-test("new accounts use USD and no sample category budgets or import control", async ({ page }) => {
+test("new accounts use USD and no sample category budgets", async ({ page }) => {
   await openPrimaryView(page, "Budget");
   await expect(page.locator(".category-budget-empty")).toContainText("No category budgets");
   await expect(page.getByLabel("Housing expected monthly budget")).toHaveCount(0);
@@ -15,8 +15,9 @@ test("new accounts use USD and no sample category budgets or import control", as
   await page.getByRole("button", { name: "Download backup" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^moneta-backup-\d{4}-\d{2}-\d{2}\.json$/);
-  await expect(page.getByText(/Import/i)).toHaveCount(0);
-  await expect(page.locator('input[type="file"][accept*="json"]')).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Restore JSON" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import CSV" })).toBeVisible();
+  await expect(page.locator('input[type="file"][accept*="json"]')).toHaveCount(1);
 });
 
 test("migrates saved legacy balances to the current asset format once", async () => {
