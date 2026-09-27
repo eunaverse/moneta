@@ -259,7 +259,7 @@ h1, h2, h3 { font-weight: 600; }
 .goal-list article input { width: 120px; margin-top: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; font: inherit; font-size: 12px; }
 .net-worth-trend-card { margin-top: 20px; padding: 26px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
 .net-worth-trend-card .card-heading strong small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 650; }
-.net-worth-bars { height: 150px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; align-items: end; margin-top: 18px; padding: 12px 8px 0; border-bottom: 1px solid var(--line); }
+.net-worth-bars { height: 150px; display: grid; gap: 12px; align-items: end; margin-top: 18px; padding: 12px 8px 0; border-bottom: 1px solid var(--line); }
 .net-worth-bars > div { min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: 7px; }
 .net-worth-bars i { display: block; width: min(32px, 70%); min-height: 4px; border-radius: 6px 6px 0 0; background: var(--purple); }
 .net-worth-bars b { color: var(--muted); font-size: 9px; font-weight: 700; }
@@ -1049,7 +1049,7 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
   .sync-conflict-actions button { flex: 1; }
 }
 
-.insight-action-card { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); gap: 24px; align-items: center; margin-bottom: 20px; padding: 28px; border: 1px solid #cfc5f8; border-radius: 20px; background: linear-gradient(135deg, #f0edff, #fff); }
+.insight-action-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: center; margin-bottom: 20px; padding: 28px; border: 1px solid #cfc5f8; border-radius: 20px; background: linear-gradient(135deg, #f0edff, #fff); }
 .insight-plan-kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .insight-plan-kicker > span { color: var(--purple); font-size: 10px; font-weight: 850; letter-spacing: .12em; }
 .insight-plan-kicker > small { padding: 4px 7px; border-radius: 999px; background: #e6e0ff; color: #4f38aa; font-size: 9px; font-weight: 850; letter-spacing: .06em; }

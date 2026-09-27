@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculatePlanningCapacity } from "../lib/budget-calculations.ts";
+import { calculatePlanningCapacity, flexibleSpendRemaining } from "../lib/budget-calculations.ts";
 
 test("reserves every unpaid scheduled occurrence through each end month", () => {
   const result = calculatePlanningCapacity({
@@ -69,6 +69,25 @@ test("keeps a fixed end month so the divisor drops from 24 to 23 to 22", () => {
   assert.equal(august.suggestedMonthlySpending, 2_000);
   assert.equal(september.suggestedMonthlySpending, 2_000);
   assert.equal(october.suggestedMonthlySpending, 2_000);
+});
+
+test("does not subtract this month's flexible spending a second time", () => {
+  const spent = 1_000;
+  const capacity = calculatePlanningCapacity({
+    currentNetWorth: 9_000,
+    recurringExpenses: [],
+    startMonth: "2026-09",
+    endMonth: "2026-10",
+  });
+  const doubleCounted = Math.max(0, capacity.suggestedMonthlySpending - spent);
+
+  assert.equal(capacity.remainingMonths, 2);
+  assert.equal(capacity.suggestedMonthlySpending, 4_500);
+  assert.equal(doubleCounted, 3_500);
+  assert.equal(flexibleSpendRemaining(capacity.suggestedMonthlySpending, spent, capacity.remainingMonths), 4_000);
+  assert.equal(flexibleSpendRemaining(5_000, 0, 2), 5_000);
+  assert.equal(flexibleSpendRemaining(4_000, 1_000, 1), 4_000);
+  assert.equal(flexibleSpendRemaining(0, 1_000, 0), 0);
 });
 
 test("returns no monthly suggestion after the fixed plan has ended", () => {

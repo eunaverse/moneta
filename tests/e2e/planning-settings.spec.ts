@@ -89,6 +89,59 @@ test("edits assets, the fixed plan period, and insights period", async ({ page }
   await expect(page.locator(".insights-empty-state")).toContainText("No spending yet");
 });
 
+test("net worth bars follow the review lookback and the insights summary uses one column", async ({ page }) => {
+  await page.getByRole("button", { name: "Edit assets" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("Checking");
+  await dialog.getByLabel("Asset 1 amount").fill("8000");
+  await dialog.getByRole("button", { name: "Save balances" }).click();
+
+  await openPrimaryView(page, "Transactions");
+  const form = page.locator(".transaction-form");
+  await form.getByRole("button", { name: "Enter manually" }).click();
+  await form.getByLabel("Description").fill("Coffee");
+  await form.getByLabel("Amount").fill("12");
+  await form.getByRole("button", { name: /Save transaction/ }).click();
+
+  await openPrimaryView(page, "Insights");
+  const lookback = page.locator(".insight-range-controls").getByRole("spinbutton");
+  await lookback.fill("3");
+  await expect(page.locator(".net-worth-bars > div")).toHaveCount(3);
+  await expect.poll(() => page.locator(".net-worth-bars").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)).toBe(3);
+  await expect.poll(() => page.locator(".insights-page .insight-action-card").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length)).toBe(1);
+});
+
+test("rejects invalid JSON and keeps an unusable CSV currency from breaking transactions", async ({ page }) => {
+  await page.getByRole("button", { name: "Edit assets" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit assets & rates" });
+  await dialog.getByRole("button", { name: "Add asset" }).click();
+  await dialog.getByLabel("Asset 1 name").fill("Checking");
+  await dialog.getByLabel("Asset 1 amount").fill("10000");
+  await dialog.getByRole("button", { name: "Save balances" }).click();
+
+  await openPrimaryView(page, "Settings");
+  const month = await page.getByLabel("Planning start month").inputValue();
+  await page.locator('input[type="file"][accept*="json"]').setInputFiles({
+    name: "notes.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify([{ name: "not a backup" }])),
+  });
+  await expect(page.getByRole("alert")).toContainText("This backup could not be restored");
+  await openPrimaryView(page, "Overview");
+  await expect(page.getByText("$10,000", { exact: true }).first()).toBeVisible();
+
+  await openPrimaryView(page, "Settings");
+  await page.locator('input[type="file"][accept*="csv"]').setInputFiles({
+    name: "activity.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(`date,amount,description,currency\n${month}-02,12.50,Coffee,US$\n`),
+  });
+  await openPrimaryView(page, "Transactions");
+  await expect(page.getByText("Coffee")).toBeVisible();
+  await expect(page.locator(".transaction-amount").first()).toContainText("$12.50");
+});
+
 test("creates and renames a category and exposes portable backup tools", async ({ page }) => {
   await openPrimaryView(page, "Settings");
   await page.getByRole("button", { name: /Manage/ }).click();

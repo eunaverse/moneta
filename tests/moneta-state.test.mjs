@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDefaultSnapshot,
+  isRestorableSnapshot,
   migrateLegacyAssetRecord,
   normalizeSnapshot,
+  supportedCurrencyCode,
   toDisplayAmount,
 } from "../lib/moneta-state.ts";
 
@@ -312,6 +314,28 @@ test("normalization drops a corrupted receipt allocation instead of distorting c
   }), "2026-08");
 
   assert.equal(normalized.entries[0].allocations, undefined);
+});
+
+test("rejects JSON that is not a Moneta snapshot before normalization can blank the plan", () => {
+  assert.equal(isRestorableSnapshot([]), false);
+  assert.equal(isRestorableSnapshot(42), false);
+  assert.equal(isRestorableSnapshot("backup"), false);
+  assert.equal(isRestorableSnapshot(null), false);
+  assert.equal(isRestorableSnapshot(true), false);
+  assert.equal(isRestorableSnapshot({ name: "not moneta" }), false);
+  assert.equal(isRestorableSnapshot({ data: { displayCurrency: "USD" } }), false);
+  assert.equal(isRestorableSnapshot({ entries: [] }), false);
+  assert.equal(isRestorableSnapshot(legacySnapshot()), true);
+  assert.equal(normalizeSnapshot([]).data.assets.length, 0);
+  assert.equal(normalizeSnapshot({ name: "not moneta" }).entries.length, 0);
+});
+
+test("keeps only real currency codes from optional CSV values", () => {
+  assert.equal(supportedCurrencyCode("usd", "EUR"), "USD");
+  assert.equal(supportedCurrencyCode(" krw ", "EUR"), "KRW");
+  assert.equal(supportedCurrencyCode("US$", "EUR"), "EUR");
+  assert.equal(supportedCurrencyCode("dollars", "EUR"), "EUR");
+  assert.equal(supportedCurrencyCode("", "KRW"), "KRW");
 });
 
 test("normalization preserves valid savings goals and clamps progress to the target", () => {

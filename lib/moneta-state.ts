@@ -48,6 +48,18 @@ const currencyCode = (value: unknown, fallback = "USD") => {
   const code = String(value || "").trim().toUpperCase();
   return /^[A-Z]{3}$/.test(code) ? code : fallback;
 };
+
+export function supportedCurrencyCode(value: unknown, fallback = "USD") {
+  return currencyCode(value, fallback);
+}
+
+export function isRestorableSnapshot(value: unknown): value is StoredMonetaSnapshot {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const snapshot = value as Record<string, unknown>;
+  const data = snapshot.data;
+  return typeof data === "object" && data !== null && !Array.isArray(data) && Array.isArray(snapshot.entries);
+}
+
 const validMonth = (value: unknown) => /^\d{4}-\d{2}$/.test(String(value || ""));
 const migrateCategory = (value: string) => CATEGORY_MIGRATION[value] || value;
 
