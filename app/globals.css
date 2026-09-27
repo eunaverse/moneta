@@ -1180,6 +1180,8 @@ button:focus:not(:focus-visible), input:focus:not(:focus-visible), select:focus:
 .calculation-value.align-right > .calculation-tooltip { right: 0; }
 .calculation-value.align-left > .calculation-tooltip { left: 0; }
 .calculation-value:hover > .calculation-tooltip, .calculation-value:focus > .calculation-tooltip, .calculation-value:focus-within > .calculation-tooltip { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+.calculation-value:hover > .calculation-tooltip { opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-4px); }
+.calculation-value:focus > .calculation-tooltip, .calculation-value:focus-within > .calculation-tooltip { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
 .calculation-tooltip-title { display: block !important; color: #fff !important; font-size: 13px !important; font-weight: 850 !important; letter-spacing: 0 !important; }
 .calculation-tooltip code { display: block; padding: 9px 10px; border-radius: 8px; background: #ffffff0d; color: #d9d2ff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; white-space: normal; }
 .calculation-rows { display: grid !important; gap: 0; border-top: 1px solid #ffffff17; }
