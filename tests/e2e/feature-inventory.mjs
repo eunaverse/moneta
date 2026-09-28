@@ -1,4 +1,5 @@
 export const features = [
+  { id: "insights-readable-months", journey: "Read exact monthly spending amounts without overlap and scroll long ranges on desktop and mobile", spec: "tests/e2e/insights-readability.spec.ts" },
   { id: "previous-month-budget-recommendations", journey: "Apply category recommendations from the previous calendar month explicitly", spec: "tests/e2e/spending-recommendations.spec.ts" },
   { id: "bulk-budget-recommendations", journey: "Apply all eligible monthly budget recommendations on desktop and mobile and verify the updated limits", spec: "tests/e2e/spending-recommendations.spec.ts" },
   { id: "stacked-spending-trend", journey: "Read exact scheduled-payment and flexible-spending amounts separately and inspect category budget overruns", spec: "tests/e2e/spending-recommendations.spec.ts" },

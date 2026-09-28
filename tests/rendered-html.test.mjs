@@ -131,7 +131,7 @@ test("supports separate budgets, planned payments, categories, and visual insigh
   assert.match(page, /const insightMonthKeys/);
   assert.match(page, /minmax\(0, 1fr\)/);
   assert.match(page, /insightPeriodMonths > 12 \? "compact"/);
-  assert.match(page, /index % 3 === 0/);
+  assert.match(page, /Scroll horizontally to compare months/);
   assert.match(css, /\.visual-insights-grid > \* \{ min-width: 0;/);
   assert.match(css, /\.trend-bars\.compact/);
   assert.match(page, /const suggestedMonthlyBudget = monthlyLivingMoneyAvailable/);
